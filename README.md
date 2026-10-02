@@ -72,14 +72,6 @@ La aplicación correrá en `http://localhost:5173`
 
 ---
 
-## Credenciales Iniciales
-
-**Super Administrador:**
-- Email: `superadmin@sivep.unal.edu.co`
-- Password: `Sivep2026*Admin`
-
----
-
 ## Estructura del Proyecto
 
 ```

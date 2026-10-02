@@ -1,0 +1,11 @@
+# Dependencias y compilados
+node_modules/
+dist/
+# Variables de entorno con secretos: jamás subir a git
+.env
+.env.local
+# Logs y temporales
+*.log
+uploads/comprobantes/*
+!uploads/comprobantes/.gitkeep
+.DS_Store

@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #F8F9FA;
+  color: #4A4A4A;
+  line-height: 1.6;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-unal-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-unal-primary-light transition-colors focus:outline-none focus:ring-2 focus:ring-unal-primary focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply bg-unal-secondary text-white px-4 py-2 rounded-lg font-medium hover:bg-unal-secondary-light transition-colors focus:outline-none focus:ring-2 focus:ring-unal-secondary focus:ring-offset-2;
+  }
+  
+  .btn-accent {
+    @apply text-white px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+    background-color: #3F6537;
+  }
+  .btn-accent:hover {
+    background-color: #35552F;
+  }
+  .btn-accent:focus {
+    --tw-ring-color: #3F6537;
+  }
+  
+  .btn-outline {
+    @apply border-2 border-unal-primary text-unal-primary px-4 py-2 rounded-lg font-medium hover:bg-unal-primary hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-unal-primary focus:ring-offset-2;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-unal-primary focus:border-transparent transition-all;
+  }
+  .input-field::placeholder {
+    color: #6B7280;
+  }
+  
+  .label-field {
+    @apply block text-sm font-medium text-unal-secondary mb-1;
+  }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden;
+  }
+  
+  .table-container {
+    @apply overflow-x-auto scrollbar-thin;
+  }
+  
+  .table {
+    @apply w-full text-sm min-w-[640px];
+  }
+  
+  .table th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-unal-secondary uppercase tracking-wider bg-gray-50 border-b border-gray-100;
+  }
+  
+  .table td {
+    @apply px-4 py-3 border-b border-gray-100;
+  }
+  
+  .table tbody tr:hover {
+    @apply bg-gray-50;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-danger {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .badge-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .badge-gray {
+    @apply bg-gray-100 text-gray-800;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #D1D5DB transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #D1D5DB;
+    border-radius: 3px;
+  }
+}
+
+/* ============ MODO OSCURO ============ */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body,
+.dark .bg-unal-background {
+  background-color: #111827;
+}
+
+.dark .bg-white {
+  background-color: #1F2937;
+}
+
+.dark .bg-gray-50 {
+  background-color: #111827;
+}
+
+.dark .bg-gray-100 {
+  background-color: #374151;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #374151;
+}
+
+.dark .hover\:bg-gray-50:hover {
+  background-color: #1F2937;
+}
+
+.dark .text-unal-secondary {
+  color: #F3F4F6;
+}
+
+.dark .text-unal-secondary-light {
+  color: #9CA3AF;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-800 {
+  color: #E5E7EB;
+}
+
+.dark .text-gray-400,
+.dark .text-gray-500 {
+  color: #9CA3AF;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200 {
+  border-color: #374151;
+}
+
+.dark .badge-gray {
+  color: #E5E7EB;
+}
+
+.dark .input-field {
+  background-color: #374151;
+  border-color: #4B5563;
+  color: #F3F4F6;
+}
+
+.dark .input-field::placeholder {
+  color: #9CA3AF;
+}
+
+.dark .label-field {
+  color: #D1D5DB;
+}

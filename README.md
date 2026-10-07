@@ -72,14 +72,6 @@ La aplicación correrá en `http://localhost:5173`
 
 ---
 
-## Credenciales Iniciales
-
-**Super Administrador:**
-- Email: `superadmin@sivep.unal.edu.co`
-- Password: `Sivep2026*Admin`
-
----
-
 ## Estructura del Proyecto
 
 ```
@@ -292,7 +284,6 @@ server {
 - Páginas públicas: `/privacidad`, `/terminos`, `/reembolsos`, `/cookies` (Ley 1581/2012, Decreto 1377/2013, Ley 1480/2011, SIC).
 - El formulario público exige aceptación de la política (autorización previa, expresa e informada) y pide solo datos necesarios.
 - No hay cookies de rastreo ni analítica: solo almacenamiento técnico (sesión, tema, aviso). Verdict: no se requiere banner de consentimiento bloqueante; el aviso es informativo.
-- Derechos ARCO: canal `granjaelcairo@unal.edu.co`. Encargado de imágenes: Cloudinary.
 - Operativo pendiente: copias de seguridad cifradas de MySQL + procedimiento de supresión de datos.
 
 ---

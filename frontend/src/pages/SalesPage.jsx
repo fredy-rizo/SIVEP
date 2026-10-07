@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, Eye, Plus, CheckCircle, ReceiptText, KeyRound } from 'lucide-react';
 import api from '../utils/api';
-import { formatCOP, formatDate, resolveFileUrl } from '../utils/formatters';
+import { formatCOP, formatDate } from '../utils/formatters';
+import { ProofViewer } from '../components/ProofViewer';
 import { DataTable } from '../components/DataTable';
 import { Modal } from '../components/Modal';
 import toast from '../utils/toast';
@@ -345,16 +346,11 @@ export function SalesPage() {
         size="lg"
       >
         {selectedSale?.customer_proof_url ? (
-          <div className="text-center">
-            <img
-              src={resolveFileUrl(selectedSale.customer_proof_url)}
-              alt="Comprobante de pago del cliente"
-              className="max-w-full max-h-[70vh] mx-auto rounded-lg border border-gray-200 object-contain"
-            />
-            <p className="mt-4 text-sm text-unal-secondary-light">
-              Cliente: {selectedSale.customer_name} - {selectedSale.customer_document}
-            </p>
-          </div>
+          <ProofViewer
+            url={selectedSale.customer_proof_url}
+            customerName={selectedSale.customer_name}
+            customerDocument={selectedSale.customer_document}
+          />
         ) : (
           <p className="text-center text-unal-secondary-light py-8">
             Esta venta no tiene comprobante de pago adjunto.

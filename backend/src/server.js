@@ -5,9 +5,11 @@ import multipart from "@fastify/multipart";
 import staticPlugin from "@fastify/static";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import cookie from "@fastify/cookie";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import pool from "./config/database.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
@@ -17,6 +19,7 @@ import salesRoutes from "./routes/salesRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import reportsRoutes from "./routes/reportsRoutes.js";
 import publicRoutes from "./routes/publicRoutes.js";
+import cookiesRoutes from "./routes/cookiesRoutes.js";
 
 dotenv.config();
 
@@ -67,6 +70,10 @@ async function start() {
       timeWindow: "1 minute",
     });
 
+    // Parseo de cookies (necesario para leer la preferencia de consentimiento).
+    // No crea ni altera ninguna cookie existente: solo habilita request.cookies.
+    await fastify.register(cookie);
+
     // HTTPS forzado solo cuando se activa por entorno (producción detrás de
     // proxy TLS). Apagado por defecto para no romper el desarrollo local.
     if (process.env.FORCE_HTTPS === "true") {
@@ -114,9 +121,24 @@ async function start() {
     fastify.register(inventoryRoutes, { prefix: "/api/inventory" });
     fastify.register(reportsRoutes, { prefix: "/api/reports" });
     fastify.register(publicRoutes, { prefix: "/api/public" });
+    fastify.register(cookiesRoutes, { prefix: "/api/cookies" });
 
     fastify.get("/api/health", async () => {
       return { status: "ok", timestamp: new Date().toISOString() };
+    });
+
+    // Ping liviano anti-suspensión (Render/Aiven): además de responder,
+    // ejecuta SELECT 1 para mantener viva una conexión del pool de MySQL.
+    fastify.get("/ping", async (request, reply) => {
+      try {
+        await pool.query("SELECT 1");
+        return reply.code(200).send({ status: "ok", message: "Pong!" });
+      } catch (error) {
+        request.log.error(error);
+        return reply
+          .code(500)
+          .send({ status: "error", message: error.message });
+      }
     });
 
     fastify.setErrorHandler((error, request, reply) => {

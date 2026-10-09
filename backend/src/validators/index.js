@@ -134,3 +134,9 @@ export const publicLeadSchema = Joi.object({
     )
     .min(1),
 });
+
+// Consentimiento de cookies: el frontend envía { accepted: true | false }.
+// Solo valida el body del nuevo endpoint; no altera ningún otro schema.
+export const cookieConsentSchema = Joi.object({
+  accepted: Joi.boolean().required(),
+});

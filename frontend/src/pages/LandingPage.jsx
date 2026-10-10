@@ -35,11 +35,11 @@ const products = [
     category: "Apícola",
   },
   {
-    name: "Marranos",
+    name: "Porcinos",
     unit: "unidad",
     price: 350000,
     image: "https://upload.wikimedia.org/wikipedia/commons/1/1e/JEFO-Pigs.jpg",
-    category: "Porcino",
+    category: "Porcinocultura",
   },
 ];
 
@@ -163,7 +163,7 @@ export function LandingPage() {
               <div className="flex flex-wrap gap-4">
                 <a
                   href="#productos"
-                  className="btn-outline text-lg px-8 py-3 border-white text-white hover:bg-white hover:text-unal-primary"
+                  className="btn-outline text-lg px-8 py-3 border-white text-white hover:bg-white hover:text-unal-primary dark:hover:bg-unal-primary dark:hover:text-white dark:hover:border-unal-primary"
                 >
                   Ver productos
                 </a>

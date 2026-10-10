@@ -325,6 +325,7 @@ export function PublicFormPage() {
                 options={[
                   { value: 'CC', label: 'Cédula de ciudadanía (CC)' },
                   { value: 'CE', label: 'Cédula de extranjería (CE)' },
+                  { value: 'TI', label: 'Tarjeta de identidad (TI)' },
                   { value: 'NIT', label: 'NIT' },
                   { value: 'PASSPORT', label: 'Pasaporte' }
                 ]}

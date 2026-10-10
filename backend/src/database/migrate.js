@@ -40,7 +40,7 @@ const migrations = [
 
   `CREATE TABLE IF NOT EXISTS customers (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    document_type ENUM('CC', 'CE', 'NIT', 'PASSPORT') NOT NULL DEFAULT 'CC',
+    document_type ENUM('CC', 'CE', 'TI', 'NIT', 'PASSPORT') NOT NULL DEFAULT 'CC',
     document_number VARCHAR(50) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NULL,

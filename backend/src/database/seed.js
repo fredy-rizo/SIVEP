@@ -71,7 +71,7 @@ async function runSeed() {
         is_active: true,
       },
       {
-        name: "Marranos",
+        name: "Porcino",
         unit: "unidad",
         current_price: 350000.0,
         current_stock: 15,

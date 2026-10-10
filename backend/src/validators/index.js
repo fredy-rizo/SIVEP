@@ -54,7 +54,7 @@ export const productUpdateSchema = Joi.object({
 
 export const customerSchema = Joi.object({
   document_type: Joi.string()
-    .valid("CC", "CE", "NIT", "PASSPORT")
+    .valid("CC", "CE", "TI", "NIT", "PASSPORT")
     .default("CC"),
   document_number: Joi.string().min(1).max(50).required(),
   full_name: Joi.string().min(2).max(255).required(),
@@ -65,7 +65,7 @@ export const customerSchema = Joi.object({
 });
 
 export const customerUpdateSchema = Joi.object({
-  document_type: Joi.string().valid("CC", "CE", "NIT", "PASSPORT"),
+  document_type: Joi.string().valid("CC", "CE", "TI", "NIT", "PASSPORT"),
   document_number: Joi.string().min(1).max(50),
   full_name: Joi.string().min(2).max(255),
   phone: Joi.string().max(50).allow("", null),
@@ -115,7 +115,7 @@ export const reportFiltersSchema = Joi.object({
 
 export const publicLeadSchema = Joi.object({
   document_type: Joi.string()
-    .valid("CC", "CE", "NIT", "PASSPORT")
+    .valid("CC", "CE", "TI", "NIT", "PASSPORT")
     .default("CC"),
   document_number: Joi.string().min(1).max(50).required(),
   full_name: Joi.string().min(2).max(255).required(),

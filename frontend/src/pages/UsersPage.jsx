@@ -92,7 +92,8 @@ export function UsersPage() {
         full_name: user.full_name,
         role: user.role,
         granja_asignada: user.granja_asignada || '',
-        is_active: user.is_active
+        // Mismo caso que productos: normalizar 1/0 a booleano real.
+        is_active: !!user.is_active
       });
     }
     setModalOpen(true);

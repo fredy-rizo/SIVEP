@@ -1,14 +1,57 @@
+import { useState, useEffect } from 'react';
 import { LegalLayout, LegalSection, LegalList } from './LegalLayout';
+import api from '../../utils/api';
+import toast from '../../utils/toast';
 
 export function CookiesPage() {
+  const [consent, setConsent] = useState('unknown');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/api/cookies/consent')
+      .then(({ data }) => setConsent(data.consent || 'unknown'))
+      .catch(() => setConsent('unknown'));
+  }, []);
+
+  const choose = async (accepted) => {
+    setSaving(true);
+    try {
+      const { data } = await api.post('/api/cookies/consent', { accepted });
+      setConsent(data.consent);
+      try { localStorage.setItem('sivep-cookies-ok', '1'); } catch (e) {}
+      toast.success('Preferencia guardada');
+    } catch (error) {
+      toast.error('Error', 'No se pudo guardar la preferencia');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <LegalLayout title="Política de Cookies y Sesión" updated="septiembre de 2026">
+      <div className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <p className="text-sm text-unal-secondary flex-1">
+          Tu elección actual:{' '}
+          <strong>
+            {consent === 'accepted' ? 'Aceptadas' : consent === 'rejected' ? 'Rechazadas' : 'Sin definir'}
+          </strong>
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => choose(false)} disabled={saving} className="btn-secondary text-sm px-4 py-2 disabled:opacity-50">
+            Rechazar
+          </button>
+          <button onClick={() => choose(true)} disabled={saving} className="btn-primary text-sm px-4 py-2 disabled:opacity-50">
+            Aceptar
+          </button>
+        </div>
+      </div>
+
       <LegalSection title="1. ¿Usamos cookies?">
         <p>
-          <strong>No.</strong> Este sitio no instala cookies de seguimiento, publicidad ni
-          analítica de terceros. Por eso no le pedimos un consentimiento de cookies: no hay
-          nada que consentir. Solo guardamos información técnica mínima en su navegador
-          (localStorage), necesaria para que el sitio funcione.
+          Este sitio <strong>no instala cookies de seguimiento, publicidad ni analítica
+          de terceros</strong>. Solo usa una cookie técnica que recuerda si aceptaste o
+          rechazaste (por eso ves el aviso con ambas opciones) y almacenamiento mínimo
+          en tu navegador, necesario para que el sitio funcione.
         </p>
       </LegalSection>
 

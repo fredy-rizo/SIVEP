@@ -100,7 +100,9 @@ export function ProductsPage() {
         category: product.category,
         description: product.description || '',
         image_url: product.image_url || '',
-        is_active: product.is_active
+        // MySQL devuelve 1/0 y Joi solo acepta booleanos: se normaliza aquí
+        // para que guardar sin tocar la casilla no falle la validación.
+        is_active: !!product.is_active
       });
     }
     setModalOpen(true);

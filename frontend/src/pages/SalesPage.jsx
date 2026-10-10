@@ -106,17 +106,38 @@ export function SalesPage() {
     }
   };
 
-  const handleConfirmPayment = async (sale) => {
-    const id = sale.id || selectedSale?.id;
-    if (!id) return;
-    if (!window.confirm(`¿Confirmar el pago de la factura ${sale.invoice_number || selectedSale?.invoice_number}?`)) return;
+  const [confirmPayOpen, setConfirmPayOpen] = useState(false);
+  const [saleToConfirm, setSaleToConfirm] = useState(null);
+  const [confirmingPay, setConfirmingPay] = useState(false);
+
+  // Abre la tarjeta de confirmación con la info de la venta a confirmar.
+  const openConfirmPayment = (sale) => {
+    if (!sale?.id) return;
+    setSaleToConfirm(sale);
+    setConfirmPayOpen(true);
+  };
+
+  const closeConfirmPayment = () => {
+    setConfirmPayOpen(false);
+    setSaleToConfirm(null);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!saleToConfirm?.id) return;
+    setConfirmingPay(true);
     try {
-      const response = await api.patch(`/sales/${id}/payment`, { payment_status: 'pagado' });
+      const response = await api.patch(`/sales/${saleToConfirm.id}/payment`, { payment_status: 'pagado' });
       toast.success('Pago confirmado', response.data.message);
-      setSelectedSale(response.data.sale);
+      // Si la factura está abierta en el modal de detalle, se refresca también.
+      if (selectedSale?.id === saleToConfirm.id) {
+        setSelectedSale(response.data.sale);
+      }
       fetchSales();
+      closeConfirmPayment();
     } catch (error) {
       toast.error('Error', error.response?.data?.error || 'No se pudo confirmar el pago');
+    } finally {
+      setConfirmingPay(false);
     }
   };
 
@@ -230,7 +251,7 @@ export function SalesPage() {
             </button>
             {row.payment_status === 'pendiente' && (
               <button
-                onClick={() => handleConfirmPayment(row)}
+                onClick={() => openConfirmPayment(row)}
                 className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                 title="Confirmar pago"
               >
@@ -327,7 +348,7 @@ export function SalesPage() {
               </button>
               {selectedSale.payment_status === 'pendiente' && (
                 <button
-                  onClick={() => handleConfirmPayment(selectedSale)}
+                  onClick={() => openConfirmPayment(selectedSale)}
                   className="btn-accent inline-flex items-center gap-2"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -355,6 +376,65 @@ export function SalesPage() {
           <p className="text-center text-unal-secondary-light py-8">
             Esta venta no tiene comprobante de pago adjunto.
           </p>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={confirmPayOpen}
+        onClose={closeConfirmPayment}
+        title="Confirmar pago"
+        size="md"
+      >
+        {saleToConfirm && (
+          <div className="space-y-4">
+            <p className="text-sm text-unal-secondary">
+              Está por confirmar el pago de la siguiente venta. Revise la información:
+            </p>
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-unal-primary px-4 py-3">
+                <p className="text-white font-bold text-lg">{saleToConfirm.invoice_number}</p>
+                <p className="text-white/80 text-sm">
+                  {saleToConfirm.sale_date ? formatDate(saleToConfirm.sale_date) : ''}
+                  {saleToConfirm.pickup_code ? ` · Código ${saleToConfirm.pickup_code}` : ''}
+                </p>
+              </div>
+              <dl className="p-4 space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-unal-secondary-light">Cliente:</dt>
+                  <dd className="font-bold text-gray-900 text-right">{saleToConfirm.customer_name}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-unal-secondary-light">Documento:</dt>
+                  <dd className="font-bold text-gray-900 text-right">{saleToConfirm.customer_document}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-unal-secondary-light">Tipo pago:</dt>
+                  <dd className="font-bold text-gray-900 text-right capitalize">{saleToConfirm.payment_type}</dd>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-gray-200 pt-2">
+                  <dt className="text-unal-secondary-light">Total:</dt>
+                  <dd className="font-bold text-xl text-unal-primary text-right">{formatCOP(saleToConfirm.total)}</dd>
+                </div>
+                <div className="flex justify-between gap-3 items-center">
+                  <dt className="text-unal-secondary-light">Estado actual:</dt>
+                  <dd>
+                    <span className="badge badge-warning">Pendiente</span>
+                    <span className="mx-1 text-unal-secondary-light">→</span>
+                    <span className="badge badge-success">Pagado</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <button onClick={closeConfirmPayment} disabled={confirmingPay} className="btn-secondary disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleConfirmPayment} disabled={confirmingPay} className="btn-accent inline-flex items-center justify-center gap-2 disabled:opacity-50">
+                <CheckCircle className="w-4 h-4" />
+                {confirmingPay ? 'Confirmando...' : 'Confirmar pago'}
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -390,32 +470,36 @@ export function SalesPage() {
         </form>
 
         {validation?.sale && (
-          <div className="mt-4 p-4 rounded-lg border-2 border-green-500 bg-green-50 dark:bg-green-950 dark:border-green-700 space-y-2 text-sm">
-            <p className="font-semibold text-green-800 dark:text-green-200 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5" /> ¡Código válido! Coincide con esta compra:
+          <div className="mt-4 rounded-xl border-2 border-green-600 bg-white p-4 sm:p-5">
+            <p className="font-bold text-green-800 dark:text-green-300 flex items-center gap-2 text-base">
+              <CheckCircle className="w-6 h-6 text-green-700 dark:text-green-400 flex-shrink-0" />
+              ¡Código válido!
             </p>
-            <dl className="space-y-1 text-unal-secondary">
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Factura:</dt><dd className="font-medium">{validation.sale.invoice_number}</dd></div>
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Cliente:</dt><dd className="font-medium">{validation.sale.customer_name}</dd></div>
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Documento:</dt><dd className="font-medium">{validation.sale.customer_document}</dd></div>
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Total:</dt><dd className="font-medium">{formatCOP(validation.sale.total)}</dd></div>
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Pago:</dt><dd className="font-medium">{validation.sale.payment_status === 'pagado' ? 'Pagado' : 'Pendiente'}</dd></div>
-              <div className="flex justify-between"><dt className="text-unal-secondary-light">Entrega:</dt><dd className="font-medium">{validation.sale.pickup_status === 'entregado' ? 'Entregado' : 'Por recoger'}</dd></div>
+            <p className="mt-1 mb-3 text-sm font-medium text-unal-secondary">
+              Coincide con esta compra:
+            </p>
+            <dl className="rounded-lg border border-gray-200 text-sm divide-y divide-gray-100">
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Factura:</dt><dd className="font-bold text-gray-900 text-right">{validation.sale.invoice_number}</dd></div>
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Cliente:</dt><dd className="font-bold text-gray-900 text-right">{validation.sale.customer_name}</dd></div>
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Documento:</dt><dd className="font-bold text-gray-900 text-right">{validation.sale.customer_document}</dd></div>
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Total:</dt><dd className="font-bold text-gray-900 text-right">{formatCOP(validation.sale.total)}</dd></div>
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Pago:</dt><dd className="font-bold text-gray-900 text-right">{validation.sale.payment_status === 'pagado' ? 'Pagado' : 'Pendiente'}</dd></div>
+              <div className="flex justify-between gap-3 px-3 py-2"><dt className="text-unal-secondary-light">Entrega:</dt><dd className="font-bold text-gray-900 text-right">{validation.sale.pickup_status === 'entregado' ? 'Entregado' : 'Por recoger'}</dd></div>
             </dl>
-            <div className="pt-2">
-              <p className="text-xs text-unal-secondary-light mb-2">Productos ({validation.items?.length || 0}):</p>
-              <ul className="text-xs text-unal-secondary space-y-1">
+            <div className="pt-3">
+              <p className="text-sm font-semibold text-unal-secondary mb-1">Productos ({validation.items?.length || 0}):</p>
+              <ul className="text-sm font-medium text-unal-secondary space-y-1">
                 {(validation.items || []).map(item => (
                   <li key={item.id}>• {item.product_name} — {item.quantity} {item.product_unit}(s)</li>
                 ))}
               </ul>
             </div>
             {validation.sale.pickup_status === 'pendiente' ? (
-              <button onClick={handleMarkDelivered} className="btn-accent w-full mt-2">
+              <button onClick={handleMarkDelivered} className="btn-accent w-full mt-3">
                 Marcar como entregado
               </button>
             ) : (
-              <p className="text-sm font-medium text-green-800 dark:text-green-200">Esta compra ya fue entregada.</p>
+              <p className="text-sm font-bold text-green-800 dark:text-green-300 mt-3">Esta compra ya fue entregada.</p>
             )}
           </div>
         )}

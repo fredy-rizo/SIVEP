@@ -567,12 +567,12 @@ export function ReportsPage() {
 
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-unal-secondary mb-1">
-            Ventas reales vs. pronóstico
+            Ventas reales vs pronóstico
           </h3>
-          <p className="text-sm text-unal-secondary-light mb-4">
+          {/* <p className="text-sm text-unal-secondary-light mb-4">
             Recta de tendencia por mínimos cuadrados (y = m·x + b) ajustada a
             los últimos 30 días.
-          </p>
+          </p> */}
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>

@@ -12,6 +12,9 @@ import { CustomersPage } from './pages/CustomersPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { UsersPage } from './pages/UsersPage';
+import { PlansPage } from './pages/PlansPage';
+import { MyPlanPage } from './pages/MyPlanPage';
+import { AdminBillingPage } from './pages/AdminBillingPage';
 import { PrivacyPage } from './pages/legal/PrivacyPage';
 import { TermsPage } from './pages/legal/TermsPage';
 import { RefundsPage } from './pages/legal/RefundsPage';
@@ -44,9 +47,15 @@ function PrivateRoutes() {
         <Route path="/clientes" element={<CustomersPage />} />
         <Route path="/inventario" element={<InventoryPage />} />
         <Route path="/reportes" element={<ReportsPage />} />
+        <Route path="/mi-plan" element={<MyPlanPage />} />
         <Route path="/usuarios" element={
           <ProtectedRoute allowedRoles={['super_admin']}>
             <UsersPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/monetizacion" element={
+          <ProtectedRoute allowedRoles={['super_admin']}>
+            <AdminBillingPage />
           </ProtectedRoute>
         } />
       </Route>
@@ -61,6 +70,7 @@ function PublicRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/formulario-compra" element={<PublicFormPage />} />
+      <Route path="/planes" element={<PlansPage />} />
       <Route path="/login" element={
         <PublicRoute>
           <LoginPage />

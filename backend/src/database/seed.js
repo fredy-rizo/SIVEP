@@ -29,6 +29,18 @@ async function runSeed() {
 
     console.log("Super admin creado/verificado");
 
+    // Multi-tenant: los productos semilla pertenecen a la organización por
+    // defecto (creada por la migración). Sin organización no se puede sembrar.
+    const [orgRows] = await connection.query(
+      "SELECT id FROM organizations ORDER BY id ASC LIMIT 1",
+    );
+    const organizationId = orgRows[0]?.id;
+    if (!organizationId) {
+      throw new Error(
+        "No existe ninguna organización. Ejecute primero 'pnpm run db:migrate' o 'pnpm run db:add-billing'.",
+      );
+    }
+
     const products = [
       {
         name: "Huevos",
@@ -85,10 +97,11 @@ async function runSeed() {
     for (const product of products) {
       await connection.query(
         `
-        INSERT IGNORE INTO products (name, unit, current_price, current_stock, min_stock, category, description, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT IGNORE INTO products (organization_id, name, unit, current_price, current_stock, min_stock, category, description, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
         [
+          organizationId,
           product.name,
           product.unit,
           product.current_price,

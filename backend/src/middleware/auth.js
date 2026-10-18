@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import pool from '../config/database.js';
 
 dotenv.config();
 
@@ -13,7 +14,20 @@ export function authenticateToken(fastify) {
       
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Multi-tenant: los tokens emitidos antes de esta versión no traen
+      // organization_id; se resuelve una sola vez desde la BD para no dejar al
+      // usuario sin acceso a sus datos. Los tokens nuevos ya lo incluyen.
+      if (decoded.organization_id === undefined) {
+        const [rows] = await pool.query(
+          'SELECT organization_id FROM users WHERE id = ?',
+          [decoded.id],
+        );
+        decoded.organization_id = rows[0]?.organization_id ?? null;
+      }
+
       request.user = decoded;
+      request.organizationId = decoded.organization_id ?? null;
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
         return reply.code(401).send({ error: 'Token expirado' });
@@ -43,6 +57,7 @@ export function optionalAuth(fastify) {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         request.user = decoded;
+        request.organizationId = decoded.organization_id ?? null;
       }
     } catch (error) {
       // Ignore invalid tokens for optional auth

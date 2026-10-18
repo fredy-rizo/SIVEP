@@ -121,6 +121,12 @@ export function LandingPage() {
               >
                 Beneficios
               </a>
+              <Link
+                to="/planes"
+                className="text-unal-secondary hover:text-unal-primary font-medium transition-colors"
+              >
+                Planes
+              </Link>
               <Link to="/formulario-compra" className="btn-primary">
                 Comprar ahora
               </Link>
@@ -344,6 +350,14 @@ export function LandingPage() {
                     className="hover:text-white transition-colors"
                   >
                     Acceso administrativo
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/planes"
+                    className="hover:text-white transition-colors"
+                  >
+                    Planes y precios
                   </Link>
                 </li>
               </ul>

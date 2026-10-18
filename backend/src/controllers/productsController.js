@@ -48,8 +48,8 @@ export async function getProducts(request, reply) {
   );
   const { search, category, is_active, low_stock } = request.query;
 
-  let whereClause = "WHERE 1=1";
-  const params = [];
+  let whereClause = "WHERE organization_id = ?";
+  const params = [request.organizationId];
 
   if (search) {
     whereClause += " AND (name LIKE ? OR description LIKE ?)";
@@ -90,9 +90,10 @@ export async function getProducts(request, reply) {
 export async function getProductById(request, reply) {
   const { id } = request.params;
 
-  const [products] = await pool.query("SELECT * FROM products WHERE id = ?", [
-    id,
-  ]);
+  const [products] = await pool.query(
+    "SELECT * FROM products WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
 
   if (products.length === 0) {
     return reply.code(404).send({ error: "Producto no encontrado" });
@@ -120,9 +121,10 @@ export async function createProduct(request, reply) {
   } = value;
 
   const [result] = await pool.query(
-    `INSERT INTO products (name, unit, current_price, current_stock, min_stock, category, description, image_url, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO products (organization_id, name, unit, current_price, current_stock, min_stock, category, description, image_url, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      request.organizationId,
       name,
       unit,
       current_price,
@@ -135,9 +137,10 @@ export async function createProduct(request, reply) {
     ],
   );
 
-  const [newProduct] = await pool.query("SELECT * FROM products WHERE id = ?", [
-    result.insertId,
-  ]);
+  const [newProduct] = await pool.query(
+    "SELECT * FROM products WHERE id = ? AND organization_id = ?",
+    [result.insertId, request.organizationId],
+  );
 
   return reply.code(201).send({ product: newProduct[0] });
 }
@@ -150,9 +153,10 @@ export async function updateProduct(request, reply) {
 
   const { id } = request.params;
 
-  const [existing] = await pool.query("SELECT id FROM products WHERE id = ?", [
-    id,
-  ]);
+  const [existing] = await pool.query(
+    "SELECT id FROM products WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
   if (existing.length === 0) {
     return reply.code(404).send({ error: "Producto no encontrado" });
   }
@@ -171,16 +175,17 @@ export async function updateProduct(request, reply) {
     return reply.code(400).send({ error: "No hay campos para actualizar" });
   }
 
-  params.push(id);
+  params.push(id, request.organizationId);
 
   await pool.query(
-    `UPDATE products SET ${fields.join(", ")} WHERE id = ?`,
+    `UPDATE products SET ${fields.join(", ")} WHERE id = ? AND organization_id = ?`,
     params,
   );
 
-  const [updated] = await pool.query("SELECT * FROM products WHERE id = ?", [
-    id,
-  ]);
+  const [updated] = await pool.query(
+    "SELECT * FROM products WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
 
   return reply.send({ product: updated[0] });
 }
@@ -189,21 +194,25 @@ export async function deleteProduct(request, reply) {
   const { id } = request.params;
 
   const [existing] = await pool.query(
-    "SELECT id, is_active FROM products WHERE id = ?",
-    [id],
+    "SELECT id, is_active FROM products WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
   );
   if (existing.length === 0) {
     return reply.code(404).send({ error: "Producto no encontrado" });
   }
 
-  await pool.query("UPDATE products SET is_active = FALSE WHERE id = ?", [id]);
+  await pool.query(
+    "UPDATE products SET is_active = FALSE WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
 
   return reply.send({ message: "Producto desactivado correctamente" });
 }
 
 export async function getCategories(request, reply) {
   const [categories] = await pool.query(
-    "SELECT DISTINCT category FROM products WHERE is_active = TRUE ORDER BY category",
+    "SELECT DISTINCT category FROM products WHERE is_active = TRUE AND organization_id = ? ORDER BY category",
+    [request.organizationId],
   );
   return reply.send({ categories: categories.map((c) => c.category) });
 }

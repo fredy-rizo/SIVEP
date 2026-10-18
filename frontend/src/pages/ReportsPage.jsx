@@ -8,6 +8,9 @@ import {
   Package,
   DollarSign,
   Brain,
+  Activity,
+  Calculator,
+  Lock,
 } from "lucide-react";
 import {
   BarChart,
@@ -28,6 +31,8 @@ import api from "../utils/api";
 import { formatCOP, formatDate } from "../utils/formatters";
 import { DataTable } from "../components/DataTable";
 import { KPICard } from "../components/KPICard";
+import { LockedFeature } from "../components/FeatureGate";
+import { usePlan } from "../context/PlanContext";
 import toast from "../utils/toast";
 
 const COLORS = [
@@ -40,6 +45,7 @@ const COLORS = [
 ];
 
 export function ReportsPage() {
+  const { hasFeature } = usePlan();
   const [activeTab, setActiveTab] = useState("sales");
   const [filters, setFilters] = useState({
     start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -53,6 +59,9 @@ export function ReportsPage() {
   // Pronóstico (álgebra lineal): recta de tendencia + afinidad de productos.
   const [forecast, setForecast] = useState(null);
   const [affinity, setAffinity] = useState([]);
+  // Cálculo diferencial: ritmo de ventas (derivadas) y pedido óptimo (EOQ).
+  const [rate, setRate] = useState(null);
+  const [eoq, setEoq] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const fetchReports = async () => {
@@ -72,25 +81,46 @@ export function ReportsPage() {
     } finally {
       setLoading(false);
     }
-    // Analítica con álgebra lineal: se carga por separado para que un fallo
-    // aquí (p. ej. backend sin reiniciar) nunca tumbe los demás reportes.
+    // Analítica premium (álgebra y cálculo): solo se consulta si el plan del
+    // usuario la incluye, para no generar 402 ni parpadeos. Se experiencia el
+    // gating aquí, pero el backend es la autoridad final.
     try {
-      const [forecastRes, affinityRes] = await Promise.all([
-        api.get("/reports/forecast?days=7"),
-        api.get("/reports/affinity?limit=5"),
-      ]);
-      setForecast(forecastRes.data);
-      setAffinity(affinityRes.data.pairs || []);
+      if (hasFeature("analytics.algebra")) {
+        const [forecastRes, affinityRes] = await Promise.all([
+          api.get("/reports/forecast?days=7"),
+          api.get("/reports/affinity?limit=5"),
+        ]);
+        setForecast(forecastRes.data);
+        setAffinity(affinityRes.data.pairs || []);
+      } else {
+        setForecast(null);
+        setAffinity([]);
+      }
+
+      if (hasFeature("analytics.calculus")) {
+        const [rateRes, eoqRes] = await Promise.all([
+          api.get("/reports/rate?days=30"),
+          api.get("/reports/eoq?days=90&limit=10"),
+        ]);
+        setRate(rateRes.data);
+        setEoq(eoqRes.data);
+      } else {
+        setRate(null);
+        setEoq(null);
+      }
     } catch (error) {
-      console.error("No se pudo cargar el pronóstico:", error);
+      console.error("No se pudo cargar la analítica:", error);
       setForecast(null);
       setAffinity([]);
+      setRate(null);
+      setEoq(null);
     }
   };
 
   useEffect(() => {
     fetchReports();
-  }, [filters]);
+    // Se re-ejecuta cuando cambia el plan para cargar/descargar la analítica.
+  }, [filters, hasFeature]);
 
   const handleExport = async (endpoint, filename) => {
     try {
@@ -619,6 +649,87 @@ export function ReportsPage() {
           </div>
         </div>
 
+        {/* Cálculo diferencial: ritmo de ventas (1ª y 2ª derivada). */}
+        {rate && (
+          <div className="card p-6">
+            {/* <h3 className="text-lg font-semibold text-unal-secondary mb-1">
+              Ritmo de ventas (cálculo diferencial)
+            </h3> */}
+            <h3 className="text-lg font-semibold text-unal-secondary mb-1">
+              Ritmo de ventas
+            </h3>
+            {/* <p className="text-sm text-unal-secondary-light mb-4">
+              Velocidad (1ª derivada, $/día) y aceleración (2ª derivada, $/día²)
+              de la serie de ventas de los últimos {rate.days} días. Fase
+              actual:{" "}
+              <span className="font-medium text-unal-primary">
+                {rate.phase}
+              </span>
+              .
+            </p> */}
+            <p className="text-sm text-unal-secondary-light mb-4">
+              Fase actual:{" "}
+              <span className="font-medium text-unal-primary">
+                {rate.phase}
+              </span>
+              .
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <KPICard
+                title="Velocidad actual"
+                value={`${rate.currentVelocity >= 0 ? "+" : ""}${formatCOP(rate.currentVelocity)}/día`}
+                icon={<Activity className="w-6 h-6" />}
+                iconBg="bg-unal-primary/10"
+                changeLabel="Ritmo de cambio (1ª derivada)"
+              />
+              <KPICard
+                title="Aceleración actual"
+                value={`${rate.currentAcceleration >= 0 ? "+" : ""}${formatCOP(rate.currentAcceleration)}/día²`}
+                icon={<Activity className="w-6 h-6" />}
+                iconBg="bg-unal-accent/10"
+                changeLabel="Cambio del ritmo (2ª derivada)"
+              />
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={(rate.series || []).map((s) => ({
+                    date: s.date.slice(5),
+                    velocidad: s.velocity,
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "#6B7280" }}
+                    interval={3}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#6B7280" }}
+                    tickFormatter={(v) => formatCOP(v).replace("$", "")}
+                  />
+                  <Tooltip
+                    formatter={(value) => [formatCOP(value), "Velocidad"]}
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: "8px",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="velocidad"
+                    name="Velocidad ($/día)"
+                    stroke="#5B8C4E"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-unal-secondary mb-1">
             Productos que se venden juntos
@@ -659,6 +770,98 @@ export function ReportsPage() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  // Pestaña "Optimización": resultado del cálculo diferencial aplicado a
+  // inventario (EOQ). Muestra, por producto, el pedido que minimiza el costo
+  // total (q* = √(2DS/H)) y el ahorro frente a una política ingenua.
+  const renderEoqTab = () => {
+    if (!eoq) {
+      return (
+        <div className="card p-8 text-center">
+          <Calculator className="w-10 h-10 mx-auto mb-3 text-unal-secondary-light" />
+          <p className="text-unal-secondary font-medium">
+            Optimización no disponible
+          </p>
+          <p className="text-sm text-unal-secondary-light mt-1">
+            Reinicia el backend para activar el endpoint de pedido óptimo (EOQ).
+          </p>
+        </div>
+      );
+    }
+
+    const { products = [], parameters = {} } = eoq;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <KPICard
+            title="Ahorro potencial anual"
+            value={eoq.totalPotentialSavingsFormatted || formatCOP(0)}
+            icon={<DollarSign className="w-6 h-6" />}
+            iconBg="bg-unal-accent/10"
+          />
+          <KPICard
+            title="Productos analizados"
+            value={eoq.count || 0}
+            icon={<Package className="w-6 h-6" />}
+            iconBg="bg-unal-primary/10"
+          />
+          <KPICard
+            title="Costo por pedido (S)"
+            value={parameters.orderCostFormatted || formatCOP(0)}
+            icon={<Calculator className="w-6 h-6" />}
+            iconBg="bg-unal-secondary/10"
+          />
+        </div>
+
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-unal-secondary mb-1">
+            Pedido óptimo por producto (EOQ)
+          </h3>
+          {/* <p className="text-sm text-unal-secondary-light mb-4">
+            q* = √(2·D·S / H) minimiza el costo total (criterio de la 2ª
+            derivada). Costo de mantener H ={" "}
+            {Math.round((parameters.holdingRate || 0) * 100)}% anual del valor
+            de la unidad; costo de pedir S ={" "}
+            {parameters.orderCostFormatted || formatCOP(0)}. Demanda proyectada
+            desde los últimos {parameters.windowDays} días.
+          </p> */}
+          <DataTable
+            columns={[
+              { key: "name", label: "Producto" },
+              {
+                key: "annualDemand",
+                label: "Demanda anual",
+                render: (v, row) => `${v} ${row.unit || ""}`,
+              },
+              {
+                key: "quantity",
+                label: "Pedido óptimo (q*)",
+                render: (v, row) => `${v} ${row.unit || ""}`,
+              },
+              { key: "ordersPerYear", label: "Pedidos/año" },
+              {
+                key: "cycleDays",
+                label: "Cada",
+                render: (v) => `${v} días`,
+              },
+              { key: "currentStock", label: "Stock actual" },
+              {
+                key: "suggestedOrder",
+                label: "Pedir ahora",
+                render: (v, row) => `${v} ${row.unit || ""}`,
+              },
+              { key: "savingsFormatted", label: "Ahorro anual" },
+            ]}
+            data={products}
+            keyField="id"
+            pagination={false}
+            emptyMessage="Aún no hay demanda suficiente para calcular el pedido óptimo"
+          />
         </div>
       </div>
     );
@@ -708,7 +911,8 @@ export function ReportsPage() {
           { id: "sales", label: "Ventas", icon: TrendingUp },
           { id: "inventory", label: "Inventario", icon: Package },
           { id: "customers", label: "Clientes", icon: Users },
-          { id: "forecast", label: "Pronóstico", icon: Brain },
+          { id: "forecast", label: "Pronóstico", icon: Brain, feature: "analytics.algebra" },
+          { id: "optimization", label: "Optimización", icon: Calculator, feature: "analytics.calculus" },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -720,6 +924,9 @@ export function ReportsPage() {
             }`}
           >
             <tab.icon className="w-4 h-4" /> {tab.label}
+            {tab.feature && !hasFeature(tab.feature) && (
+              <Lock className="w-3 h-3" aria-label="Función premium" />
+            )}
           </button>
         ))}
       </div>
@@ -733,7 +940,26 @@ export function ReportsPage() {
           {activeTab === "sales" && renderSalesTab()}
           {activeTab === "inventory" && renderInventoryTab()}
           {activeTab === "customers" && renderCustomersTab()}
-          {activeTab === "forecast" && renderForecastTab()}
+          {activeTab === "forecast" &&
+            (hasFeature("analytics.algebra") ? (
+              renderForecastTab()
+            ) : (
+              <LockedFeature
+                title="Proyecciones y afinidad de productos"
+                featureLabel="Álgebra lineal · Plan Profesional"
+                description="El pronóstico de ventas por mínimos cuadrados y la afinidad entre productos (similitud coseno) están disponibles desde el plan Profesional."
+              />
+            ))}
+          {activeTab === "optimization" &&
+            (hasFeature("analytics.calculus") ? (
+              renderEoqTab()
+            ) : (
+              <LockedFeature
+                title="Ritmo de ventas y pedido óptimo"
+                featureLabel="Cálculo diferencial · Plan Profesional"
+                description="La velocidad/aceleración de ventas (derivadas) y el tamaño económico de pedido (EOQ) están disponibles desde el plan Profesional."
+              />
+            ))}
         </>
       )}
 

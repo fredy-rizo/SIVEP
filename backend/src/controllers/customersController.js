@@ -6,8 +6,8 @@ export async function getCustomers(request, reply) {
   const { page, limit, offset } = calculatePagination(request.query.page, request.query.limit);
   const { search, origin, has_payment_proof } = request.query;
   
-  let whereClause = 'WHERE 1=1';
-  const params = [];
+  let whereClause = 'WHERE organization_id = ?';
+  const params = [request.organizationId];
   
   if (search) {
     whereClause += ' AND (full_name LIKE ? OR document_number LIKE ? OR email LIKE ?)';
@@ -42,7 +42,10 @@ export async function getCustomers(request, reply) {
 export async function getCustomerById(request, reply) {
   const { id } = request.params;
   
-  const [customers] = await pool.query('SELECT * FROM customers WHERE id = ?', [id]);
+  const [customers] = await pool.query(
+    'SELECT * FROM customers WHERE id = ? AND organization_id = ?',
+    [id, request.organizationId]
+  );
   
   if (customers.length === 0) {
     return reply.code(404).send({ error: 'Cliente no encontrado' });
@@ -60,8 +63,8 @@ export async function createCustomer(request, reply) {
   const { document_type, document_number, full_name, phone, email, address, origin } = value;
   
   const [existing] = await pool.query(
-    'SELECT id FROM customers WHERE document_type = ? AND document_number = ?',
-    [document_type, document_number]
+    'SELECT id FROM customers WHERE document_type = ? AND document_number = ? AND organization_id = ?',
+    [document_type, document_number, request.organizationId]
   );
   
   if (existing.length > 0) {
@@ -69,12 +72,15 @@ export async function createCustomer(request, reply) {
   }
   
   const [result] = await pool.query(
-    `INSERT INTO customers (document_type, document_number, full_name, phone, email, address, origin)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [document_type, document_number, full_name, phone || null, email || null, address || null, origin]
+    `INSERT INTO customers (organization_id, document_type, document_number, full_name, phone, email, address, origin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [request.organizationId, document_type, document_number, full_name, phone || null, email || null, address || null, origin]
   );
   
-  const [newCustomer] = await pool.query('SELECT * FROM customers WHERE id = ?', [result.insertId]);
+  const [newCustomer] = await pool.query(
+    'SELECT * FROM customers WHERE id = ? AND organization_id = ?',
+    [result.insertId, request.organizationId]
+  );
   
   return reply.code(201).send({ customer: newCustomer[0] });
 }
@@ -87,15 +93,18 @@ export async function updateCustomer(request, reply) {
   
   const { id } = request.params;
   
-  const [existing] = await pool.query('SELECT id FROM customers WHERE id = ?', [id]);
+  const [existing] = await pool.query(
+    'SELECT id FROM customers WHERE id = ? AND organization_id = ?',
+    [id, request.organizationId]
+  );
   if (existing.length === 0) {
     return reply.code(404).send({ error: 'Cliente no encontrado' });
   }
   
   if (value.document_type && value.document_number) {
     const [docExists] = await pool.query(
-      'SELECT id FROM customers WHERE document_type = ? AND document_number = ? AND id != ?',
-      [value.document_type, value.document_number, id]
+      'SELECT id FROM customers WHERE document_type = ? AND document_number = ? AND id != ? AND organization_id = ?',
+      [value.document_type, value.document_number, id, request.organizationId]
     );
     if (docExists.length > 0) {
       return reply.code(409).send({ error: 'Ya existe un cliente con este documento' });
@@ -116,11 +125,17 @@ export async function updateCustomer(request, reply) {
     return reply.code(400).send({ error: 'No hay campos para actualizar' });
   }
   
-  params.push(id);
+  params.push(id, request.organizationId);
   
-  await pool.query(`UPDATE customers SET ${fields.join(', ')} WHERE id = ?`, params);
+  await pool.query(
+    `UPDATE customers SET ${fields.join(', ')} WHERE id = ? AND organization_id = ?`,
+    params
+  );
   
-  const [updated] = await pool.query('SELECT * FROM customers WHERE id = ?', [id]);
+  const [updated] = await pool.query(
+    'SELECT * FROM customers WHERE id = ? AND organization_id = ?',
+    [id, request.organizationId]
+  );
   
   return reply.send({ customer: updated[0] });
 }
@@ -129,7 +144,10 @@ export async function reviewPaymentProof(request, reply) {
   const { id } = request.params;
   const { approved } = request.body;
   
-  const [existing] = await pool.query('SELECT id, has_payment_proof FROM customers WHERE id = ?', [id]);
+  const [existing] = await pool.query(
+    'SELECT id, has_payment_proof FROM customers WHERE id = ? AND organization_id = ?',
+    [id, request.organizationId]
+  );
   if (existing.length === 0) {
     return reply.code(404).send({ error: 'Cliente no encontrado' });
   }
@@ -140,8 +158,8 @@ export async function reviewPaymentProof(request, reply) {
   
   if (!approved) {
     await pool.query(
-      'UPDATE customers SET has_payment_proof = FALSE, proof_image_url = NULL WHERE id = ?',
-      [id]
+      'UPDATE customers SET has_payment_proof = FALSE, proof_image_url = NULL WHERE id = ? AND organization_id = ?',
+      [id, request.organizationId]
     );
     return reply.send({ message: 'Comprobante rechazado y eliminado' });
   }
@@ -151,7 +169,8 @@ export async function reviewPaymentProof(request, reply) {
 
 export async function getPendingProofCount(request, reply) {
   const [result] = await pool.query(
-    'SELECT COUNT(*) as count FROM customers WHERE has_payment_proof = TRUE AND origin = "formulario_publico"'
+    'SELECT COUNT(*) as count FROM customers WHERE has_payment_proof = TRUE AND origin = "formulario_publico" AND organization_id = ?',
+    [request.organizationId]
   );
   return reply.send({ count: result[0].count });
 }

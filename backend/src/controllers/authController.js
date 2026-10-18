@@ -42,6 +42,9 @@ export async function login(request, reply) {
       email: user.email,
       role: user.role,
       full_name: user.full_name,
+      // Multi-tenant: la organización viaja en el token para filtrar los datos
+      // del negocio sin consultar la BD en cada petición.
+      organization_id: user.organization_id ?? null,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "24h" },

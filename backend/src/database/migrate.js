@@ -1,5 +1,15 @@
 import pool from "../config/database.js";
 import dotenv from "dotenv";
+// Tablas de monetización (planes, features, suscripciones, licencias...).
+// Se definen en billingSchema.js para reutilizarlas tanto aquí (instalación
+// desde cero) como en add-billing-schema.js (bases de datos existentes).
+import {
+  billingMigrations,
+  seedBillingCatalog,
+  ensureUsersOrganizationColumn,
+} from "./billingSchema.js";
+// Aislamiento multi-tenant de las tablas de negocio.
+import { ensureOrganizationColumns } from "./multitenantSchema.js";
 
 dotenv.config();
 
@@ -116,6 +126,9 @@ const migrations = [
     INDEX idx_inventory_movements_date (created_at),
     INDEX idx_inventory_movements_reference (reference_type, reference_id)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+  // --- Monetización: organizaciones, planes, features, suscripciones, etc. ---
+  ...billingMigrations,
 ];
 
 async function runMigrations() {
@@ -126,6 +139,13 @@ async function runMigrations() {
     for (const migration of migrations) {
       await connection.query(migration);
     }
+
+    // Pasos que no se pueden expresar con CREATE TABLE IF NOT EXISTS: sembrar el
+    // catálogo comercial, agregar users.organization_id y aislar por
+    // organización las tablas de negocio (multi-tenant).
+    await seedBillingCatalog(connection);
+    await ensureUsersOrganizationColumn(connection);
+    await ensureOrganizationColumns(connection);
 
     console.log("Migraciones completadas exitosamente");
   } catch (error) {

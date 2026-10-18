@@ -3,17 +3,22 @@ import { publicLeadSchema } from "../validators/index.js";
 import { generateInvoiceNumber } from "../utils/helpers.js";
 import { generateUniquePickupCode } from "../utils/pickup.js";
 import { uploadImage } from "../utils/upload.js";
+// El formulario público no tiene sesión: los datos se asocian a la
+// organización por defecto (la granja que publica el enlace).
+import { resolveDefaultOrganizationId } from "../middleware/plan.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 export async function getPublicProducts(request, reply) {
   try {
+    const organizationId = await resolveDefaultOrganizationId();
     const [products] = await pool.query(
       `SELECT id, name, unit, current_price, current_stock, category, description, image_url
        FROM products 
-       WHERE is_active = TRUE AND current_stock > 0
+       WHERE is_active = TRUE AND current_stock > 0 AND organization_id = ?
        ORDER BY category, name`,
+      [organizationId],
     );
 
     return reply.send({ products });
@@ -111,26 +116,28 @@ export async function createPublicLead(request, reply) {
 
     await connection.beginTransaction();
 
+    const organizationId = await resolveDefaultOrganizationId();
+
     // 1. Buscar o crear el cliente. Se valida por número de documento para no
     // duplicar clientes que ya compraron antes.
     let customerId = null;
     const [byDocument] = await connection.query(
-      "SELECT id FROM customers WHERE document_type = ? AND document_number = ?",
-      [value.document_type, value.document_number],
+      "SELECT id FROM customers WHERE document_type = ? AND document_number = ? AND organization_id = ?",
+      [value.document_type, value.document_number, organizationId],
     );
     if (byDocument.length > 0) {
       customerId = byDocument[0].id;
     } else {
       const [byNumber] = await connection.query(
-        "SELECT id FROM customers WHERE document_number = ?",
-        [value.document_number],
+        "SELECT id FROM customers WHERE document_number = ? AND organization_id = ?",
+        [value.document_number, organizationId],
       );
       if (byNumber.length > 0) {
         customerId = byNumber[0].id;
       } else if (email) {
         const [byEmail] = await connection.query(
-          "SELECT id FROM customers WHERE email = ?",
-          [email],
+          "SELECT id FROM customers WHERE email = ? AND organization_id = ?",
+          [email, organizationId],
         );
         if (byEmail.length > 0) {
           customerId = byEmail[0].id;
@@ -147,14 +154,15 @@ export async function createPublicLead(request, reply) {
            has_payment_proof = TRUE,
            proof_image_url = ?,
            origin = 'formulario_publico'
-         WHERE id = ?`,
-        [value.full_name, phone, email, proofImageUrl, customerId],
+         WHERE id = ? AND organization_id = ?`,
+        [value.full_name, phone, email, proofImageUrl, customerId, organizationId],
       );
     } else {
       const [result] = await connection.query(
-        `INSERT INTO customers (document_type, document_number, full_name, phone, email, origin, has_payment_proof, proof_image_url)
-         VALUES (?, ?, ?, ?, ?, 'formulario_publico', TRUE, ?)`,
+        `INSERT INTO customers (organization_id, document_type, document_number, full_name, phone, email, origin, has_payment_proof, proof_image_url)
+         VALUES (?, ?, ?, ?, ?, ?, 'formulario_publico', TRUE, ?)`,
         [
+          organizationId,
           value.document_type,
           value.document_number,
           value.full_name,
@@ -171,8 +179,8 @@ export async function createPublicLead(request, reply) {
     const saleItems = [];
     for (const item of value.products) {
       const [rows] = await connection.query(
-        "SELECT id, name, unit, current_price, current_stock FROM products WHERE id = ? AND is_active = TRUE",
-        [item.product_id],
+        "SELECT id, name, unit, current_price, current_stock FROM products WHERE id = ? AND is_active = TRUE AND organization_id = ?",
+        [item.product_id, organizationId],
       );
       if (rows.length === 0) {
         throw {
@@ -199,7 +207,8 @@ export async function createPublicLead(request, reply) {
 
     // 3. Usuario del sistema para registrar la venta (requerido por FK)
     const [sysUsers] = await connection.query(
-      `SELECT id FROM users WHERE is_active = TRUE ORDER BY (role = 'super_admin') DESC, id ASC LIMIT 1`,
+      `SELECT id FROM users WHERE is_active = TRUE AND organization_id = ? ORDER BY (role = 'super_admin') DESC, id ASC LIMIT 1`,
+      [organizationId],
     );
     if (sysUsers.length === 0) {
       throw {
@@ -219,9 +228,10 @@ export async function createPublicLead(request, reply) {
       try {
         pickup_code = await generateUniquePickupCode(connection);
         const [saleResult] = await connection.query(
-          `INSERT INTO sales (invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
-           VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, 'contado', 'pendiente', ?, 'pendiente', ?, ?)`,
+          `INSERT INTO sales (organization_id, invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, 'contado', 'pendiente', ?, 'pendiente', ?, ?)`,
           [
+            organizationId,
             invoice_number,
             customerId,
             subtotal,
@@ -252,21 +262,22 @@ export async function createPublicLead(request, reply) {
       );
 
       const [prodRows] = await connection.query(
-        "SELECT current_stock FROM products WHERE id = ?",
-        [item.product_id],
+        "SELECT current_stock FROM products WHERE id = ? AND organization_id = ?",
+        [item.product_id, organizationId],
       );
       const previousStock = prodRows[0].current_stock;
       const newStock = previousStock - item.quantity;
 
       await connection.query(
-        "UPDATE products SET current_stock = ? WHERE id = ?",
-        [newStock, item.product_id],
+        "UPDATE products SET current_stock = ? WHERE id = ? AND organization_id = ?",
+        [newStock, item.product_id, organizationId],
       );
 
       await connection.query(
-        `INSERT INTO inventory_movements (product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
-         VALUES (?, 'salida', ?, ?, ?, ?, 'venta', ?, ?)`,
+        `INSERT INTO inventory_movements (organization_id, product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
+         VALUES (?, ?, 'salida', ?, ?, ?, ?, 'venta', ?, ?)`,
         [
+          organizationId,
           item.product_id,
           item.quantity,
           previousStock,

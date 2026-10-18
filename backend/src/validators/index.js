@@ -17,6 +17,7 @@ export const userCreateSchema = Joi.object({
   full_name: Joi.string().min(2).max(255).required(),
   role: Joi.string().valid("super_admin", "admin_granja").required(),
   granja_asignada: Joi.string().max(255).allow("", null),
+  organization_id: Joi.number().integer().positive().allow(null),
   is_active: Joi.boolean().default(true),
 });
 
@@ -25,6 +26,7 @@ export const userUpdateSchema = Joi.object({
   full_name: Joi.string().min(2).max(255),
   role: Joi.string().valid("super_admin", "admin_granja"),
   granja_asignada: Joi.string().max(255).allow("", null),
+  organization_id: Joi.number().integer().positive().allow(null),
   is_active: Joi.boolean(),
 }).min(1);
 
@@ -138,5 +140,91 @@ export const publicLeadSchema = Joi.object({
 // Consentimiento de cookies: el frontend envía { accepted: true | false }.
 // Solo valida el body del nuevo endpoint; no altera ningún otro schema.
 export const cookieConsentSchema = Joi.object({
-  accepted: Joi.boolean().required(),
+  // Decisión rápida: aceptar o rechazar todas las categorías opcionales.
+  accepted: Joi.boolean(),
+  // Decisión personalizada por categoría (necesarias siempre activas).
+  categories: Joi.object({
+    preferences: Joi.boolean(),
+    analytics: Joi.boolean(),
+    marketing: Joi.boolean(),
+  }),
+})
+  .or("accepted", "categories")
+  .messages({
+    "object.missing": 'Debe enviar "accepted" o "categories"',
+  });
+
+// Solicitud de cambio/ascenso de plan (pago manual). `notes` es opcional para
+// que el cliente deje datos de contacto o requerimientos.
+export const billingRequestSchema = Joi.object({
+  plan_code: Joi.string().max(40).required(),
+  billing_cycle: Joi.string().valid("monthly", "yearly").default("monthly"),
+  notes: Joi.string().max(1000).allow("", null),
+});
+
+// ---------------------------------------------------------------------------
+// Administración de monetización (solo super_admin)
+// ---------------------------------------------------------------------------
+export const organizationSchema = Joi.object({
+  name: Joi.string().min(2).max(255).required(),
+  nit: Joi.string().max(50).allow("", null),
+  city: Joi.string().max(120).allow("", null),
+  contact_email: Joi.string().email().allow("", null),
+  contact_phone: Joi.string().max(50).allow("", null),
+  notes: Joi.string().max(2000).allow("", null),
+  is_active: Joi.boolean().default(true),
+});
+
+export const organizationUpdateSchema = Joi.object({
+  name: Joi.string().min(2).max(255),
+  nit: Joi.string().max(50).allow("", null),
+  city: Joi.string().max(120).allow("", null),
+  contact_email: Joi.string().email().allow("", null),
+  contact_phone: Joi.string().max(50).allow("", null),
+  notes: Joi.string().max(2000).allow("", null),
+  is_active: Joi.boolean(),
+}).min(1);
+
+export const subscriptionAdminSchema = Joi.object({
+  organization_id: Joi.number().integer().positive().required(),
+  plan_code: Joi.string().max(40).required(),
+  billing_cycle: Joi.string().valid("monthly", "yearly").default("monthly"),
+  status: Joi.string()
+    .valid("trialing", "active", "past_due", "canceled", "expired")
+    .default("active"),
+  current_period_end: Joi.date().iso().allow(null),
+});
+
+export const subscriptionUpdateSchema = Joi.object({
+  plan_code: Joi.string().max(40),
+  billing_cycle: Joi.string().valid("monthly", "yearly"),
+  status: Joi.string().valid("trialing", "active", "past_due", "canceled", "expired"),
+  current_period_end: Joi.date().iso(),
+}).min(1);
+
+export const licenseSchema = Joi.object({
+  organization_id: Joi.number().integer().positive().required(),
+  plan_code: Joi.string().max(40).required(),
+  type: Joi.string().valid("perpetual", "subscription").default("perpetual"),
+  seats: Joi.number().integer().positive().allow(null),
+  expires_at: Joi.date().iso().allow(null),
+  notes: Joi.string().max(2000).allow("", null),
+});
+
+export const planUpdateSchema = Joi.object({
+  price_monthly: Joi.number().min(0),
+  price_yearly: Joi.number().min(0),
+  is_active: Joi.boolean(),
+}).min(1);
+
+export const serviceOrderUpdateSchema = Joi.object({
+  status: Joi.string().valid("solicitado", "en_proceso", "completado", "cancelado"),
+  amount: Joi.number().min(0),
+  notes: Joi.string().max(2000).allow("", null),
+}).min(1);
+
+// Solicitud de un servicio de valor agregado por parte del cliente.
+export const serviceRequestSchema = Joi.object({
+  service_code: Joi.string().max(40).required(),
+  notes: Joi.string().max(1000).allow("", null),
 });

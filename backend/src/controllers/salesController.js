@@ -18,8 +18,8 @@ export async function getSales(request, reply) {
   );
   const { start_date, end_date, payment_status, customer_id } = request.query;
 
-  let whereClause = "WHERE 1=1";
-  const params = [];
+  let whereClause = "WHERE s.organization_id = ?";
+  const params = [request.organizationId];
 
   if (start_date) {
     whereClause += " AND sale_date >= ?";
@@ -55,7 +55,7 @@ export async function getSales(request, reply) {
   );
 
   const [countResult] = await pool.query(
-    `SELECT COUNT(*) as total FROM sales ${whereClause}`,
+    `SELECT COUNT(*) as total FROM sales s ${whereClause}`,
     params,
   );
 
@@ -75,8 +75,8 @@ export async function getSaleById(request, reply) {
      FROM sales s
      JOIN customers c ON s.customer_id = c.id
      JOIN users u ON s.created_by = u.id
-     WHERE s.id = ?`,
-    [id],
+     WHERE s.id = ? AND s.organization_id = ?`,
+    [id, request.organizationId],
   );
 
   if (sales.length === 0) {
@@ -103,11 +103,21 @@ export async function createSale(request, reply) {
   const { customer_id, sale_date, payment_type, payment_status, notes, items } =
     value;
   const created_by = request.user.id;
+  const organizationId = request.organizationId;
 
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
+
+    // El cliente debe pertenecer a la misma organización (aislamiento).
+    const [customerRows] = await connection.query(
+      "SELECT id FROM customers WHERE id = ? AND organization_id = ?",
+      [customer_id, organizationId],
+    );
+    if (customerRows.length === 0) {
+      throw new Error("Cliente no encontrado");
+    }
 
     const invoice_number = generateInvoiceNumber();
 
@@ -116,8 +126,8 @@ export async function createSale(request, reply) {
 
     for (const item of items) {
       const [products] = await connection.query(
-        "SELECT id, name, current_stock, current_price FROM products WHERE id = ? AND is_active = TRUE",
-        [item.product_id],
+        "SELECT id, name, current_stock, current_price FROM products WHERE id = ? AND is_active = TRUE AND organization_id = ?",
+        [item.product_id, organizationId],
       );
 
       if (products.length === 0) {
@@ -150,9 +160,10 @@ export async function createSale(request, reply) {
     const total = subtotal + tax;
 
     const [saleResult] = await connection.query(
-      `INSERT INTO sales (invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`,
+      `INSERT INTO sales (organization_id, invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`,
       [
+        organizationId,
         invoice_number,
         customer_id,
         sale_date || new Date(),
@@ -177,21 +188,22 @@ export async function createSale(request, reply) {
       );
 
       await connection.query(
-        "UPDATE products SET current_stock = current_stock - ? WHERE id = ?",
-        [item.quantity, item.product_id],
+        "UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?",
+        [item.quantity, item.product_id, organizationId],
       );
 
       const [product] = await connection.query(
-        "SELECT current_stock FROM products WHERE id = ?",
-        [item.product_id],
+        "SELECT current_stock FROM products WHERE id = ? AND organization_id = ?",
+        [item.product_id, organizationId],
       );
       const newStock = product[0].current_stock;
       const previousStock = newStock + item.quantity;
 
       await connection.query(
-        `INSERT INTO inventory_movements (product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
-         VALUES (?, 'salida', ?, ?, ?, ?, 'venta', ?, ?)`,
+        `INSERT INTO inventory_movements (organization_id, product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
+         VALUES (?, ?, 'salida', ?, ?, ?, ?, 'venta', ?, ?)`,
         [
+          organizationId,
           item.product_id,
           item.quantity,
           previousStock,
@@ -209,8 +221,8 @@ export async function createSale(request, reply) {
       `SELECT s.*, c.full_name as customer_name
        FROM sales s
        JOIN customers c ON s.customer_id = c.id
-       WHERE s.id = ?`,
-      [saleId],
+       WHERE s.id = ? AND s.organization_id = ?`,
+      [saleId, organizationId],
     );
 
     return reply.code(201).send({ sale: newSale[0] });
@@ -232,17 +244,18 @@ export async function updatePaymentStatus(request, reply) {
       .send({ error: 'Estado de pago inválido. Use "pagado" o "pendiente"' });
   }
 
-  const [existing] = await pool.query("SELECT id FROM sales WHERE id = ?", [
-    id,
-  ]);
+  const [existing] = await pool.query(
+    "SELECT id FROM sales WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
   if (existing.length === 0) {
     return reply.code(404).send({ error: "Venta no encontrada" });
   }
 
-  await pool.query("UPDATE sales SET payment_status = ? WHERE id = ?", [
-    payment_status,
-    id,
-  ]);
+  await pool.query(
+    "UPDATE sales SET payment_status = ? WHERE id = ? AND organization_id = ?",
+    [payment_status, id, request.organizationId],
+  );
 
   const [updated] = await pool.query(
     `SELECT s.*, c.full_name as customer_name, c.document_number as customer_document,
@@ -250,8 +263,8 @@ export async function updatePaymentStatus(request, reply) {
      FROM sales s
      JOIN customers c ON s.customer_id = c.id
      JOIN users u ON s.created_by = u.id
-     WHERE s.id = ?`,
-    [id],
+     WHERE s.id = ? AND s.organization_id = ?`,
+    [id, request.organizationId],
   );
 
   return reply.send({
@@ -276,8 +289,8 @@ export async function validatePickupCode(request, reply) {
      FROM sales s
      JOIN customers c ON s.customer_id = c.id
      JOIN users u ON s.created_by = u.id
-     WHERE s.pickup_code = ?`,
-    [code],
+     WHERE s.pickup_code = ? AND s.organization_id = ?`,
+    [code, request.organizationId],
   );
 
   if (sales.length === 0) {
@@ -298,12 +311,18 @@ export async function validatePickupCode(request, reply) {
 export async function markDelivered(request, reply) {
   const { id } = request.params;
 
-  const [existing] = await pool.query("SELECT id, pickup_status FROM sales WHERE id = ?", [id]);
+  const [existing] = await pool.query(
+    "SELECT id, pickup_status FROM sales WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
   if (existing.length === 0) {
     return reply.code(404).send({ error: "Venta no encontrada" });
   }
 
-  await pool.query("UPDATE sales SET pickup_status = 'entregado' WHERE id = ?", [id]);
+  await pool.query(
+    "UPDATE sales SET pickup_status = 'entregado' WHERE id = ? AND organization_id = ?",
+    [id, request.organizationId],
+  );
 
   return reply.send({ message: "Entrega registrada correctamente" });
 }

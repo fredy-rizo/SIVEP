@@ -20,6 +20,8 @@ import inventoryRoutes from "./routes/inventoryRoutes.js";
 import reportsRoutes from "./routes/reportsRoutes.js";
 import publicRoutes from "./routes/publicRoutes.js";
 import cookiesRoutes from "./routes/cookiesRoutes.js";
+import billingRoutes from "./routes/billingRoutes.js";
+import adminBillingRoutes from "./routes/adminBillingRoutes.js";
 
 dotenv.config();
 
@@ -122,6 +124,8 @@ async function start() {
     fastify.register(reportsRoutes, { prefix: "/api/reports" });
     fastify.register(publicRoutes, { prefix: "/api/public" });
     fastify.register(cookiesRoutes, { prefix: "/api/cookies" });
+    fastify.register(billingRoutes, { prefix: "/api/billing" });
+    fastify.register(adminBillingRoutes, { prefix: "/api/admin" });
 
     fastify.get("/api/health", async () => {
       return { status: "ok", timestamp: new Date().toISOString() };

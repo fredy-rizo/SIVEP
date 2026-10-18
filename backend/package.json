@@ -11,7 +11,9 @@
     "db:seed": "node src/database/seed.js",
     "db:add-notes": "node src/database/add-notes-column.js",
     "db:add-pickup": "node src/database/add-pickup-columns.js",
-    "db:add-ti": "node src/database/add-document-ti.js"
+    "db:add-ti": "node src/database/add-document-ti.js",
+    "db:add-billing": "node src/database/add-billing-schema.js",
+    "db:add-multitenant": "node src/database/add-multitenant-schema.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",

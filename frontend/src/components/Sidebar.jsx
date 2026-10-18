@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePlan } from '../context/PlanContext';
 import { LogoShield } from './LogoShield';
 import {
   LayoutDashboard,
@@ -13,7 +14,10 @@ import {
   AlertTriangle,
   ClipboardList,
   PlusCircle,
-  X
+  X,
+  CreditCard,
+  Crown,
+  BadgeDollarSign
 } from 'lucide-react';
 
 const navigation = [
@@ -24,14 +28,17 @@ const navigation = [
   { name: 'Clientes', href: '/clientes', icon: Users },
   { name: 'Inventario', href: '/inventario', icon: ClipboardList },
   { name: 'Reportes', href: '/reportes', icon: BarChart3 },
+  { name: 'Mi plan', href: '/mi-plan', icon: CreditCard },
 ];
 
 const superAdminNavigation = [
-  { name: 'Usuarios', href: '/usuarios', icon: Settings }
+  { name: 'Usuarios', href: '/usuarios', icon: Settings },
+  { name: 'Monetización', href: '/admin/monetizacion', icon: BadgeDollarSign }
 ];
 
 export function Sidebar({ open = false, onClose }) {
   const { user, logout, isSuperAdmin } = useAuth();
+  const { planName } = usePlan();
   const location = useLocation();
 
   const items = [...navigation];
@@ -85,6 +92,13 @@ export function Sidebar({ open = false, onClose }) {
       </nav>
 
       <div className="p-4 border-t border-gray-200">
+        {planName && (
+          <div className="px-3 pb-3">
+            <span className="badge badge-info gap-1">
+              <Crown className="w-3 h-3" /> Plan {planName}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-3 px-3 py-2 mb-3">
           <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
             <span className="text-sm font-medium text-unal-secondary">

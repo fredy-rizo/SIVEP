@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
         const userData = response.data.user;
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-      } catch (error) {
+      } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);

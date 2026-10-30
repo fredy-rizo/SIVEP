@@ -5,6 +5,15 @@ import {
   buildPaginatedResponse,
 } from "../utils/helpers.js";
 import { uploadImage } from "../utils/upload.js";
+import { publishCatalogUpdate } from "../services/catalogEvents.js";
+
+// ============================================================================
+// CONTROLADOR DE PRODUCTOS — SIVEP
+// ----------------------------------------------------------------------------
+// Cada alta, edición o desactivación de producto invalida la caché pública y
+// emite un evento WebSocket. Sin esto, un producto nuevo podría tardar hasta el
+// TTL de la caché en aparecer en el escaparate.
+// ============================================================================
 
 export async function uploadProductImage(request, reply) {
   if (!request.isMultipart()) {
@@ -142,6 +151,9 @@ export async function createProduct(request, reply) {
     [result.insertId, request.organizationId],
   );
 
+  // Nuevo producto visible en el catálogo público (si nace con stock > 0).
+  await publishCatalogUpdate(request.organizationId, []);
+
   return reply.code(201).send({ product: newProduct[0] });
 }
 
@@ -187,6 +199,9 @@ export async function updateProduct(request, reply) {
     [id, request.organizationId],
   );
 
+  // Precio, stock, categoría o visibilidad pueden haber cambiado.
+  await publishCatalogUpdate(request.organizationId, []);
+
   return reply.send({ product: updated[0] });
 }
 
@@ -205,6 +220,9 @@ export async function deleteProduct(request, reply) {
     "UPDATE products SET is_active = FALSE WHERE id = ? AND organization_id = ?",
     [id, request.organizationId],
   );
+
+  // Deja de aparecer en el catálogo público de inmediato.
+  await publishCatalogUpdate(request.organizationId, []);
 
   return reply.send({ message: "Producto desactivado correctamente" });
 }

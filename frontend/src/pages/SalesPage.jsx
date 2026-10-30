@@ -38,7 +38,7 @@ export function SalesPage() {
         total: response.data.pagination.total,
         totalPages: response.data.pagination.totalPages
       }));
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudieron cargar las ventas');
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ export function SalesPage() {
       setSelectedSale(response.data.sale);
       setSaleItems(response.data.items);
       setModalOpen(true);
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudo cargar el detalle');
     }
   };
@@ -286,7 +286,9 @@ export function SalesPage() {
                   <div className="flex justify-between"><dt className="text-unal-secondary-light">Factura:</dt><dd className="font-medium">{selectedSale.invoice_number}</dd></div>
                   <div className="flex justify-between"><dt className="text-unal-secondary-light">Fecha:</dt><dd className="font-medium">{formatDate(selectedSale.sale_date)}</dd></div>
                   <div className="flex justify-between"><dt className="text-unal-secondary-light">Cliente:</dt><dd className="font-medium">{selectedSale.customer_name}</dd></div>
-                  <div className="flex justify-between"><dt className="text-unal-secondary-light">Documento:</dt><dd className="font-medium">{selectedSale.customer_document}</dd></div>
+                  <div className="flex justify-between"><dt className="text-unal-secondary-light">Documento:</dt><dd className="font-medium">{selectedSale.customer_document_type ? `${selectedSale.customer_document_type} ` : ''}{selectedSale.customer_document}</dd></div>
+                  {selectedSale.customer_phone && <div className="flex justify-between"><dt className="text-unal-secondary-light">Teléfono:</dt><dd className="font-medium">{selectedSale.customer_phone}</dd></div>}
+                  {selectedSale.customer_email && <div className="flex justify-between"><dt className="text-unal-secondary-light">Correo:</dt><dd className="font-medium break-all text-right">{selectedSale.customer_email}</dd></div>}
                   <div className="flex justify-between"><dt className="text-unal-secondary-light">Tipo pago:</dt><dd className="font-medium capitalize">{selectedSale.payment_type}</dd></div>
                   <div className="flex justify-between"><dt className="text-unal-secondary-light">Estado:</dt><dd className="font-medium">
                     <span className={`badge ${selectedSale.payment_status === 'pagado' ? 'badge-success' : 'badge-warning'}`}>
@@ -328,7 +330,7 @@ export function SalesPage() {
                   <tbody>
                     {saleItems.map(item => (
                       <tr key={item.id}>
-                        <td>{item.product_name} <span className="text-xs text-unal-secondary-light">({item.product_unit})</span></td>
+                        <td>{item.product_name}{item.product_unit && <span className="text-xs text-unal-secondary-light"> ({item.product_unit})</span>}</td>
                         <td className="text-center">{item.quantity}</td>
                         <td className="text-right">{formatCOP(item.unit_price)}</td>
                         <td className="text-right font-medium">{formatCOP(item.total)}</td>
@@ -490,7 +492,7 @@ export function SalesPage() {
               <p className="text-sm font-semibold text-unal-secondary mb-1">Productos ({validation.items?.length || 0}):</p>
               <ul className="text-sm font-medium text-unal-secondary space-y-1">
                 {(validation.items || []).map(item => (
-                  <li key={item.id}>• {item.product_name} — {item.quantity} {item.product_unit}(s)</li>
+                  <li key={item.id}>• {item.product_name} — {item.quantity}{item.product_unit ? ` ${item.product_unit}(s)` : ''}</li>
                 ))}
               </ul>
             </div>

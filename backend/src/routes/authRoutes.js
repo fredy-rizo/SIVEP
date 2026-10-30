@@ -1,6 +1,5 @@
 import { login, me } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { loginSchema } from '../validators/index.js';
 
 export default async function authRoutes(fastify) {
   fastify.post('/login', {

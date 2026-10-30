@@ -2,7 +2,6 @@ import pool from "../config/database.js";
 import bcrypt from "bcryptjs";
 import { userCreateSchema, userUpdateSchema } from "../validators/index.js";
 import {
-  sanitizeUser,
   calculatePagination,
   buildPaginatedResponse,
 } from "../utils/helpers.js";

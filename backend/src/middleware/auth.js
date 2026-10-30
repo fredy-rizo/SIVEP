@@ -4,7 +4,7 @@ import pool from '../config/database.js';
 
 dotenv.config();
 
-export function authenticateToken(fastify) {
+export function authenticateToken(_fastify) {
   return async function (request, reply) {
     try {
       const authHeader = request.headers.authorization;
@@ -49,8 +49,8 @@ export function requireRole(...allowedRoles) {
   };
 }
 
-export function optionalAuth(fastify) {
-  return async function (request, reply) {
+export function optionalAuth(_fastify) {
+  return async function (request, _reply) {
     try {
       const authHeader = request.headers.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -59,7 +59,7 @@ export function optionalAuth(fastify) {
         request.user = decoded;
         request.organizationId = decoded.organization_id ?? null;
       }
-    } catch (error) {
+    } catch {
       // Ignore invalid tokens for optional auth
     }
   };

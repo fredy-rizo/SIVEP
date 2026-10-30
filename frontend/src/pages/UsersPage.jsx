@@ -46,7 +46,7 @@ export function UsersPage() {
         total: response.data.pagination.total,
         totalPages: response.data.pagination.totalPages
       }));
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudieron cargar los usuarios');
     } finally {
       setLoading(false);
@@ -146,7 +146,7 @@ export function UsersPage() {
       await api.delete(`/users/${user.id}`);
       toast.success(user.is_active ? 'Usuario desactivado' : 'Usuario activado');
       fetchUsers();
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudo actualizar el estado');
     }
   };

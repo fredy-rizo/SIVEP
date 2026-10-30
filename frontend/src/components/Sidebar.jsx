@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlan } from '../context/PlanContext';
 import { LogoShield } from './LogoShield';
@@ -17,13 +17,15 @@ import {
   X,
   CreditCard,
   Crown,
-  BadgeDollarSign
+  BadgeDollarSign,
+  Banknote
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Ventas', href: '/ventas', icon: ShoppingCart },
   { name: 'Nueva Venta', href: '/ventas/nueva', icon: PlusCircle },
+  { name: 'Efectivo', href: '/efectivo', icon: Banknote },
   { name: 'Productos', href: '/productos', icon: Package },
   { name: 'Clientes', href: '/clientes', icon: Users },
   { name: 'Inventario', href: '/inventario', icon: ClipboardList },
@@ -39,7 +41,6 @@ const superAdminNavigation = [
 export function Sidebar({ open = false, onClose }) {
   const { user, logout, isSuperAdmin } = useAuth();
   const { planName } = usePlan();
-  const location = useLocation();
 
   const items = [...navigation];
   if (isSuperAdmin) {
@@ -68,9 +69,6 @@ export function Sidebar({ open = false, onClose }) {
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {items.map((item) => {
-          const isActive = location.pathname === item.href || 
-            (item.href !== '/dashboard' && location.pathname.startsWith(item.href));
-          
           return (
             <NavLink
               key={item.name}

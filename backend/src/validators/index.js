@@ -115,26 +115,78 @@ export const reportFiltersSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(10),
 });
 
+// Comprobante de pago del formulario público EN LÍNEA. El cliente ya pagó en
+// la página de la UNAL y sube el PDF de eCollect. El efectivo NO se registra
+// aquí: usa `POST /api/public/cash-claims`, que exige validación administrativa
+// antes de descontar stock.
 export const publicLeadSchema = Joi.object({
+  payment_mode: Joi.string().valid("online").required().messages({
+    "any.only":
+      "El pago en efectivo se registra en el formulario de solicitud de efectivo",
+  }),
+  accepts_policy: Joi.boolean().valid(true).required().messages({
+    "any.only": "Debe aceptar la política de privacidad para continuar",
+    "any.required": "Debe aceptar la política de privacidad para continuar",
+  }),
+});
+
+// Solicitud de compra en efectivo. A diferencia de `publicLeadSchema`, aquí el
+// comprador describe los productos que pagó en caja. Los precios NO se aceptan
+// del cliente: el controlador los toma del catálogo y calcula el total. El
+// comprobante (foto o PDF) se valida en el multipart, no en este schema.
+export const cashClaimSchema = Joi.object({
+  cash_receipt_code: Joi.string().trim().min(2).max(50).required().messages({
+    "string.empty": "El código de caja es obligatorio",
+    "any.required": "El código de caja es obligatorio",
+  }),
   document_type: Joi.string()
     .valid("CC", "CE", "TI", "NIT", "PASSPORT")
     .default("CC"),
-  document_number: Joi.string().min(1).max(50).required(),
-  full_name: Joi.string().min(2).max(255).required(),
-  phone: Joi.string().max(50).allow("", null),
+  document_number: Joi.string().trim().min(3).max(50).required().messages({
+    "string.empty": "El número de documento es obligatorio",
+    "any.required": "El número de documento es obligatorio",
+  }),
+  full_name: Joi.string().trim().min(3).max(255).required().messages({
+    "string.empty": "El nombre completo es obligatorio",
+    "any.required": "El nombre completo es obligatorio",
+  }),
+  phone: Joi.string().trim().max(50).allow("", null),
   email: Joi.string().email().allow("", null),
-  products: Joi.array()
+  purchase_date: Joi.date().iso().max("now").required().messages({
+    "date.base": "La fecha de compra no es válida",
+    "date.max": "La fecha de compra no puede ser futura",
+    "any.required": "La fecha de compra es obligatoria",
+  }),
+  declared_total: Joi.number().min(0).required().messages({
+    "number.base": "El valor pagado debe ser un número",
+    "any.required": "El valor pagado es obligatorio",
+  }),
+  notes: Joi.string().max(1000).allow("", null),
+  accepts_policy: Joi.boolean().valid(true).required().messages({
+    "any.only": "Debe aceptar la política de privacidad para continuar",
+    "any.required": "Debe aceptar la política de privacidad para continuar",
+  }),
+  items: Joi.array()
     .items(
       Joi.object({
         product_id: Joi.number().integer().positive().required(),
-        product_name: Joi.string().allow("", null),
-        product_unit: Joi.string().allow("", null),
-        quantity: Joi.number().integer().positive().required(),
-        unit_price: Joi.number().min(0).required(),
-        total: Joi.number().min(0),
+        quantity: Joi.number().integer().positive().max(1000).required(),
       }),
     )
-    .min(1),
+    .min(1)
+    .required()
+    .messages({
+      "array.min": "Debes seleccionar al menos un producto",
+      "any.required": "Debes seleccionar al menos un producto",
+    }),
+});
+
+// Rechazo de una solicitud: el motivo queda visible para el comprador.
+export const cashClaimRejectSchema = Joi.object({
+  reason: Joi.string().trim().min(3).max(1000).required().messages({
+    "string.empty": "Debes indicar el motivo del rechazo",
+    "any.required": "Debes indicar el motivo del rechazo",
+  }),
 });
 
 // Consentimiento de cookies: el frontend envía { accepted: true | false }.

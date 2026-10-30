@@ -76,7 +76,7 @@ export function ReportsPage() {
       setSalesReport(salesRes.data);
       setInventoryReport(inventoryRes.data);
       setCustomersReport(customersRes.data);
-    } catch (error) {
+    } catch {
       toast.error("Error", "No se pudieron cargar los reportes");
     } finally {
       setLoading(false);
@@ -139,7 +139,7 @@ export function ReportsPage() {
       link.click();
       link.remove();
       toast.success("Exportado", "El archivo CSV se ha descargado");
-    } catch (error) {
+    } catch {
       toast.error("Error", "No se pudo exportar el reporte");
     }
   };
@@ -911,8 +911,18 @@ export function ReportsPage() {
           { id: "sales", label: "Ventas", icon: TrendingUp },
           { id: "inventory", label: "Inventario", icon: Package },
           { id: "customers", label: "Clientes", icon: Users },
-          { id: "forecast", label: "Pronóstico", icon: Brain, feature: "analytics.algebra" },
-          { id: "optimization", label: "Optimización", icon: Calculator, feature: "analytics.calculus" },
+          {
+            id: "forecast",
+            label: "Pronóstico",
+            icon: Brain,
+            feature: "analytics.algebra",
+          },
+          {
+            id: "optimization",
+            label: "Optimización",
+            icon: Calculator,
+            feature: "analytics.calculus",
+          },
         ].map((tab) => (
           <button
             key={tab.id}

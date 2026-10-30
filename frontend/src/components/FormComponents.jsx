@@ -117,7 +117,7 @@ export const FileInput = forwardRef(function FileInput({
   accept, 
   onChange,
   preview,
-  className = '', 
+  _className = '', 
   ...props 
 }, ref) {
   return (
@@ -174,7 +174,7 @@ export const FileInput = forwardRef(function FileInput({
 
 export const Checkbox = forwardRef(function Checkbox({ 
   label, 
-  className = '', 
+  _className = '', 
   ...props 
 }, ref) {
   return (

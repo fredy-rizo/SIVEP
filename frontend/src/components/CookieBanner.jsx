@@ -2,10 +2,27 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Cookie, Settings2 } from 'lucide-react';
 import api from '../utils/api';
-import toast from '../utils/toast';
 import { Modal } from './Modal';
 
-const LEGACY_KEY = 'sivep-cookies-ok';
+const DECISION_KEY = 'sivep-cookies-ok';
+
+// La decisión se guarda en localStorage para que el aviso no vuelva a aparecer
+// en cada recarga, aunque la cookie del backend no esté disponible.
+function hasStoredDecision() {
+  try {
+    return localStorage.getItem(DECISION_KEY) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+function storeDecision() {
+  try {
+    localStorage.setItem(DECISION_KEY, '1');
+  } catch (e) {
+    /* almacenamiento no disponible */
+  }
+}
 
 // Categorías de cookies. Las "necesarias" (sesión, tema) siempre están activas;
 // las demás son opcionales y el usuario decide cuáles acepta.
@@ -40,11 +57,20 @@ export function CookieBanner() {
   const [prefs, setPrefs] = useState(ALL_OFF);
 
   useEffect(() => {
+    let active = true;
+
+    // Si ya decidió en este navegador, el aviso no se vuelve a mostrar.
+    if (hasStoredDecision()) {
+      setVisible(false);
+      return undefined;
+    }
+
     const check = async () => {
       try {
         const { data } = await api.get('/cookies/consent');
+        if (!active) return;
         if (data.consent === 'accepted' || data.consent === 'rejected' || data.consent === 'custom') {
-          try { localStorage.setItem(LEGACY_KEY, '1'); } catch (e) {}
+          storeDecision();
           if (data.categories) {
             setPrefs({
               preferences: !!data.categories.preferences,
@@ -57,15 +83,15 @@ export function CookieBanner() {
           setVisible(true);
         }
       } catch (e) {
-        // Sin backend: se respeta la marca local si existe.
-        try {
-          if (!localStorage.getItem(LEGACY_KEY)) setVisible(true);
-        } catch (err) {
-          setVisible(true);
-        }
+        // Sin backend: se muestra solo si no hay una decisión local.
+        if (active) setVisible(true);
       }
     };
     check();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const persist = async (payload) => {
@@ -87,29 +113,22 @@ export function CookieBanner() {
 
   // Decisión rápida (Aceptar / Rechazar).
   const choose = async (accepted) => {
+    storeDecision();
     setSaving(true);
-    await persist({ accepted });
-    try { localStorage.setItem(LEGACY_KEY, '1'); } catch (err) {}
-    setSaving(false);
     setPrefsOpen(false);
     setVisible(false);
-    toast.success(
-      'Preferencia guardada',
-      accepted
-        ? 'Aceptaste todas las categorías de cookies.'
-        : 'Rechazaste las cookies opcionales.'
-    );
+    await persist({ accepted });
+    setSaving(false);
   };
 
   // Decisión personalizada por categoría.
   const saveCustom = async () => {
+    storeDecision();
     setSaving(true);
-    await persist({ categories: { ...prefs } });
-    try { localStorage.setItem(LEGACY_KEY, '1'); } catch (err) {}
-    setSaving(false);
     setPrefsOpen(false);
     setVisible(false);
-    toast.success('Preferencias guardadas', 'Se registraron tus opciones de cookies.');
+    await persist({ categories: { ...prefs } });
+    setSaving(false);
   };
 
   const toggle = (key) => setPrefs((p) => ({ ...p, [key]: !p[key] }));

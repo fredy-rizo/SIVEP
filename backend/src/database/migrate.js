@@ -60,6 +60,7 @@ const migrations = [
     origin ENUM('manual', 'formulario_publico') NOT NULL DEFAULT 'manual',
     has_payment_proof BOOLEAN NOT NULL DEFAULT FALSE,
     proof_image_url VARCHAR(500) NULL,
+    last_purchase_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_customers_document (document_type, document_number),
@@ -96,7 +97,9 @@ const migrations = [
   `CREATE TABLE IF NOT EXISTS sale_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     sale_id INT NOT NULL,
-    product_id INT NOT NULL,
+    product_id INT NULL,
+    description VARCHAR(255) NULL,
+    source ENUM('inventario', 'externo') NOT NULL DEFAULT 'inventario',
     quantity INT NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
     total DECIMAL(15,2) NOT NULL,
@@ -105,7 +108,8 @@ const migrations = [
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     INDEX idx_sale_items_sale (sale_id),
-    INDEX idx_sale_items_product (product_id)
+    INDEX idx_sale_items_product (product_id),
+    INDEX idx_sale_items_source (source)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
   `CREATE TABLE IF NOT EXISTS inventory_movements (

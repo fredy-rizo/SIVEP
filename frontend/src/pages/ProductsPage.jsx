@@ -47,7 +47,7 @@ export function ProductsPage() {
         total: productsRes.data.pagination.total,
         totalPages: productsRes.data.pagination.totalPages
       }));
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudieron cargar los productos');
     } finally {
       setLoading(false);
@@ -179,7 +179,7 @@ export function ProductsPage() {
       await api.delete(`/products/${product.id}`);
       toast.success('Producto desactivado');
       fetchData();
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudo desactivar');
     }
   };

@@ -64,15 +64,15 @@ export async function getSalesReport(request, reply) {
 
   const [topProducts] = await pool.query(
     `SELECT 
-       p.name,
-       p.unit,
+       COALESCE(p.name, si.description, 'Venta externa') as name,
+       COALESCE(p.unit, '') as unit,
        SUM(si.quantity) as total_quantity,
        COALESCE(SUM(si.total), 0) as total_revenue
      FROM sale_items si
      JOIN sales s ON si.sale_id = s.id
-     JOIN products p ON si.product_id = p.id
+     LEFT JOIN products p ON si.product_id = p.id
      ${whereClause.replace("s.", "s.")}
-     GROUP BY p.id, p.name, p.unit
+     GROUP BY COALESCE(p.name, si.description, 'Venta externa'), COALESCE(p.unit, '')
      ORDER BY total_revenue DESC
      LIMIT 10`,
     params,
@@ -131,7 +131,7 @@ export async function getSalesReport(request, reply) {
 }
 
 export async function getInventoryReport(request, reply) {
-  const { error, value } = reportFiltersSchema.validate(request.query);
+  const { error } = reportFiltersSchema.validate(request.query);
   if (error) {
     return reply.code(400).send({ error: error.details[0].message });
   }
@@ -554,6 +554,7 @@ export async function getProductAffinity(request, reply) {
      JOIN sales s ON s.id = si.sale_id
      WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
        AND s.organization_id = ?
+       AND si.product_id IS NOT NULL
      GROUP BY s.customer_id, si.product_id`,
     [request.organizationId],
   );
@@ -708,6 +709,7 @@ export async function getEoqOptimization(request, reply) {
      JOIN sales s ON s.id = si.sale_id
      WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
        AND s.organization_id = ?
+       AND si.product_id IS NOT NULL
      GROUP BY si.product_id`,
     [historyDays, request.organizationId],
   );

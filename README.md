@@ -32,6 +32,7 @@ valor agregado) con aislamiento **multi-tenant** por organización.
 ## Stack tecnológico
 
 **Backend**
+
 - Node.js con JavaScript (ES Modules)
 - Fastify como framework HTTP
 - MySQL (`mysql2` con promesas)
@@ -44,6 +45,7 @@ valor agregado) con aislamiento **multi-tenant** por organización.
 - `cors`, `dotenv` y `Joi` para CORS, configuración y validaciones
 
 **Frontend**
+
 - React 18 con JavaScript
 - Vite como bundler
 - Tailwind CSS para estilos
@@ -56,12 +58,12 @@ valor agregado) con aislamiento **multi-tenant** por organización.
 
 ## Paleta de colores UNAL
 
-| Rol | Color | Hex |
-|-----|-------|-----|
-| Primario | Granate | `#8B1E3F` |
-| Acento | Verde oliva | `#5B8C4E` |
+| Rol        | Color       | Hex       |
+| ---------- | ----------- | --------- |
+| Primario   | Granate     | `#8B1E3F` |
+| Acento     | Verde oliva | `#5B8C4E` |
 | Secundario | Gris oscuro | `#4A4A4A` |
-| Fondo | Gris claro | `#F8F9FA` |
+| Fondo      | Gris claro  | `#F8F9FA` |
 
 Tipografía: **Inter**.
 
@@ -92,14 +94,19 @@ pnpm run db:migrate        # Crea el esquema base
 pnpm run db:seed           # Datos de ejemplo (organización y catálogo)
 pnpm run db:add-billing    # Tablas de monetización (idempotente)
 pnpm run db:add-multitenant # Aislamiento multi-tenant (idempotente)
+pnpm run db:add-notes      # Notas de venta (idempotente)
+pnpm run db:add-pickup     # Códigos de reclamo (idempotente)
+pnpm run db:add-payments   # Columnas de pago/eCollect (idempotente)
+pnpm run db:add-ti         # Tipo de documento TI (idempotente)
+pnpm run db:add-external-sales # Ventas externas desde PDF (idempotente)
+pnpm run db:add-cash-claims    # Solicitudes de compra en efectivo (idempotente)
 pnpm run dev
 ```
 
 El servidor corre en `http://localhost:3000`.
 
-> En bases de datos ya existentes basta con ejecutar `db:add-billing` y
-> `db:add-multitenant` una vez: son migraciones incrementales e idempotentes
-> (se pueden repetir sin dañar datos).
+> En bases de datos ya existentes los scripts `db:add-*` son migraciones
+> incrementales e idempotentes: se pueden repetir sin dañar datos.
 
 ### 3. Frontend
 
@@ -175,7 +182,18 @@ SIVEP/
 ### Páginas públicas (sin autenticación)
 
 - **Landing Page (`/`)**: presentación de la granja, catálogo y proceso de compra.
-- **Formulario de compra (`/formulario-compra`)**: pedidos con subida de comprobante.
+- **Registro de compra en línea (`/formulario-compra`)**: el cliente ya pagó
+  en la página de pago virtual de la UNAL y sube el PDF de eCollect. SIVEP lee
+  los datos, registra cliente y venta externa, descuenta el stock cuando
+  identifica el producto por nombre o por precio, y entrega el código de
+  reclamo.
+- **Solicitud de compra en efectivo (`/formulario-compra/efectivo`)**: el
+  cliente pagó en la caja de la Universidad y registra el código del recibo,
+  sus datos, los productos comprados y una foto/PDF del recibo. La solicitud
+  **no descuenta stock**: un administrador valida el recibo y solo al aprobar se
+  crea la venta, se descuenta el inventario y se habilita el código de reclamo.
+  Incluye una pestaña para consultar el estado con el código de solicitud y el
+  documento del comprador.
 - **Planes (`/planes`)**: catálogo público de planes y servicios.
 - **Legales**: `privacidad`, `terminos`, `reembolsos`, `cookies`.
 
@@ -185,6 +203,10 @@ SIVEP/
 - **Dashboard (`/dashboard`)**: KPIs, gráficos de ventas, últimas ventas y alertas.
 - **Ventas (`/ventas`, `/ventas/nueva`)**: listado con filtros y creación con
   cálculo automático de totales e impacto en stock.
+- **Efectivo (`/efectivo`)**: validación manual de compras pagadas en caja.
+  Permite ver el recibo, comparar lo declarado con el total del catálogo y
+  aprobar (crea la venta y descuenta stock de forma atómica) o rechazar con
+  motivo. Si al aprobar no alcanza el stock, toda la operación se revierte.
 - **Productos (`/productos`)**: CRUD con alertas visuales de stock bajo.
 - **Clientes (`/clientes`)**: listado, comprobantes y aprobación/rechazo.
 - **Inventario (`/inventario`)**: stock actual, movimientos e historial.
@@ -199,12 +221,12 @@ SIVEP/
 
 ## Roles y permisos
 
-| Funcionalidad | `super_admin` | `admin_granja` |
-|---------------|:-------------:|:--------------:|
-| Dashboard / Ventas / Productos / Clientes / Inventario / Reportes | ✅ | ✅ |
-| Gestionar usuarios | ✅ | ❌ |
-| Monetización (`/admin/monetizacion`, `/api/admin/*`) | ✅ | ❌ |
-| Ver plan y solicitar servicios (`/mi-plan`) | ✅ | ✅ |
+| Funcionalidad                                                     | `super_admin` | `admin_granja` |
+| ----------------------------------------------------------------- | :-----------: | :------------: |
+| Dashboard / Ventas / Productos / Clientes / Inventario / Reportes |      ✅       |       ✅       |
+| Gestionar usuarios                                                |      ✅       |       ❌       |
+| Monetización (`/admin/monetizacion`, `/api/admin/*`)              |      ✅       |       ❌       |
+| Ver plan y solicitar servicios (`/mi-plan`)                       |      ✅       |       ✅       |
 
 El **gating por plan** es independiente del rol: ciertas funciones de analítica se
 habilitan según el plan contratado (ver [Monetización](#monetización)).
@@ -214,41 +236,50 @@ habilitan según el plan contratado (ver [Monetización](#monetización)).
 ## API
 
 ### Autenticación
+
 - `POST /api/auth/login` — iniciar sesión
 - `GET /api/auth/me` — usuario actual
 
 ### Usuarios (solo `super_admin`)
+
 - `GET /api/users` — listar
 - `POST /api/users` — crear
 - `PUT|PATCH /api/users/:id` — actualizar
 - `DELETE /api/users/:id` — desactivar (soft delete)
 
 ### Productos
+
 - `GET /api/products` · `GET /api/products/categories` · `GET /api/products/:id`
 - `POST /api/products` · `PUT|PATCH /api/products/:id` · `DELETE /api/products/:id`
 
 ### Clientes
+
 - `GET /api/customers` · `GET /api/customers/pending-proof-count` · `GET /api/customers/:id`
 - `POST /api/customers` · `PUT|PATCH /api/customers/:id`
 - `PATCH /api/customers/:id/review-proof` — aprobar/rechazar comprobante
 
 ### Ventas
+
 - `GET /api/sales` · `GET /api/sales/:id` · `POST /api/sales`
 
 ### Inventario
+
 - `GET /api/inventory` · `GET /api/inventory/movements` · `POST /api/inventory/movement`
 
 ### Reportes
+
 - `GET /api/reports/sales` · `GET /api/reports/inventory` · `GET /api/reports/customers`
 - `GET /api/reports/sales/export` · `GET /api/reports/inventory/export` · `GET /api/reports/customers/export` (CSV)
 
 ### Analítica (álgebra lineal y cálculo diferencial)
+
 - `GET /api/reports/forecast` — pronóstico de ventas (mínimos cuadrados)
 - `GET /api/reports/affinity` — afinidad entre productos (similitud coseno)
 - `GET /api/reports/rate` — velocidad y aceleración (1ª y 2ª derivada)
 - `GET /api/reports/eoq` — cantidad económica de pedido / inventario óptimo (EOQ)
 
 ### Facturación y planes
+
 - `GET /api/billing/plans` — catálogo público (sin auth)
 - `GET /api/billing/me` — plan, features, límites, uso, suscripción y órdenes
 - `GET /api/billing/invoices` — historial de facturas/pagos de la organización
@@ -258,11 +289,30 @@ habilitan según el plan contratado (ver [Monetización](#monetización)).
 - `POST /api/billing/subscription/resume` — deshacer la cancelación programada
 
 ### Cookies / consentimiento
+
 - `GET /api/cookies/consent` — lee la decisión guardada (`unknown` si no hay)
 - `POST /api/cookies/consent` — guarda la decisión (`accepted`, `categories`, etc.)
 
+### Compras en efectivo (validación manual)
+
+- `GET /api/cash-claims` — listado con filtros por estado, texto y fechas
+- `GET /api/cash-claims/:id` — detalle con ítems, stock actual y recibo
+- `POST /api/cash-claims/:id/approve` — crea la venta, descuenta stock de forma
+  atómica y usa el código de la solicitud como código de reclamo
+  (`409 INSUFFICIENT_STOCK` si no alcanza; se revierte todo)
+- `POST /api/cash-claims/:id/reject` — guarda el motivo; no toca el inventario
+
 ### Público (sin autenticación)
-- `POST /api/public/leads` — recibir formulario público con comprobante
+
+- `GET /api/public/products` — catálogo con stock en tiempo real y
+  `catalogVersion`
+- `POST /api/public/leads` — registra una compra **en línea** a partir del PDF de
+  eCollect. Identifica el producto por nombre o por precio y descuenta el stock;
+  si hay ambigüedad deja una nota. El efectivo no entra por aquí.
+- `POST /api/public/cash-claims` — registra una solicitud de compra en efectivo
+  (multipart: datos, ítems y foto/PDF del recibo). No descuenta stock.
+- `GET /api/public/cash-claims/:code?document=...` — consulta el estado de una
+  solicitud; exige el documento del comprador.
 
 ---
 
@@ -278,6 +328,7 @@ plan; los precios del catálogo se administran desde el panel y no se documentan
 ### Gating por plan
 
 Las rutas de analítica están protegidas por feature:
+
 - `analytics.algebra` (`/api/reports/forecast`, `/api/reports/affinity`)
 - `analytics.calculus` (`/api/reports/rate`, `/api/reports/eoq`)
 
@@ -345,12 +396,12 @@ decisión guardada) y ofrece **tres opciones**:
 
 Categorías:
 
-| Categoría | Descripción | Estado |
-|-----------|-------------|--------|
-| Estrictamente necesarias | Sesión y preferencia de tema | Siempre activas |
-| Preferencias | Ajustes de uso (tema, filtros) | Opcional |
-| Analítica | Métricas agregadas de uso | Opcional |
-| Publicidad | Contenido promocional | Opcional |
+| Categoría                | Descripción                    | Estado          |
+| ------------------------ | ------------------------------ | --------------- |
+| Estrictamente necesarias | Sesión y preferencia de tema   | Siempre activas |
+| Preferencias             | Ajustes de uso (tema, filtros) | Opcional        |
+| Analítica                | Métricas agregadas de uso      | Opcional        |
+| Publicidad               | Contenido promocional          | Opcional        |
 
 Detalles de implementación:
 
@@ -387,6 +438,9 @@ FORCE_HTTPS=false
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+# TTL (ms) de la caché del catálogo público. Se invalida en cada cambio de
+# stock; este valor es solo la red de seguridad.
+PUBLIC_PRODUCTS_CACHE_MS=15000
 ```
 
 Genera secretos largos y aleatorios, por ejemplo:
@@ -399,7 +453,15 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 ```env
 VITE_API_URL=http://localhost:3000/api
+VITE_ECOLLECT_PURCHASE_URL=https://pagovirtual.unal.edu.co/index.php
+# Opcional: si se omite, se deriva de VITE_API_URL (http→ws) con ruta /ws.
+VITE_WS_URL=
 ```
+
+> El stock se actualiza por WebSocket en `GET /ws`. Los clientes públicos
+> escuchan la organización pública; los usuarios con sesión envían su JWT en
+> `?token=` y escuchan su propia organización. El servidor ignora cualquier
+> `organizationId` enviado por el cliente.
 
 > Los archivos `.env` están en `.gitignore` y **nunca** deben subirse al repositorio.
 > Usa los `.env.example` como plantilla.
@@ -419,6 +481,12 @@ pnpm run db:migrate           # Migraciones base
 pnpm run db:seed              # Seed inicial
 pnpm run db:add-billing       # Tablas de monetización (idempotente)
 pnpm run db:add-multitenant   # Aislamiento multi-tenant (idempotente)
+pnpm run db:add-notes         # Notas de venta (idempotente)
+pnpm run db:add-pickup        # Códigos de reclamo (idempotente)
+pnpm run db:add-payments      # Columnas de pago/eCollect (idempotente)
+pnpm run db:add-ti            # Tipo de documento TI (idempotente)
+pnpm run db:add-external-sales # Ventas externas desde PDF (idempotente)
+pnpm run db:add-cash-claims    # Solicitudes de compra en efectivo (idempotente)
 ```
 
 ### Frontend

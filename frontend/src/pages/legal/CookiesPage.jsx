@@ -41,8 +41,7 @@ export function CookiesPage() {
       setConsent(data.consent);
       applyCategories(data.categories, setPrefs);
       try { localStorage.setItem('sivep-cookies-ok', '1'); } catch (e) {}
-      toast.success('Preferencia guardada');
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudo guardar la preferencia');
     } finally {
       setSaving(false);

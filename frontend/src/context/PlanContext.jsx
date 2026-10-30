@@ -29,7 +29,7 @@ export function PlanProvider({ children }) {
     try {
       const response = await api.get('/billing/me');
       setPlan(response.data);
-    } catch (error) {
+    } catch {
       // Si el endpoint aún no existe (backend sin reiniciar) no se rompe la app.
       setPlan(null);
     } finally {

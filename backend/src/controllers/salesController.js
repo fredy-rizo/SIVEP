@@ -4,12 +4,25 @@ import {
   generateInvoiceNumber,
   calculatePagination,
   buildPaginatedResponse,
-  formatCOP,
 } from "../utils/helpers.js";
 import {
   generateUniquePickupCode,
   normalizePickupCode,
 } from "../utils/pickup.js";
+import { applyStockMovement, InventoryError } from "../services/inventoryService.js";
+import { publishCatalogUpdate } from "../services/catalogEvents.js";
+
+// ============================================================================
+// CONTROLADOR DE VENTAS — SIVEP
+// ----------------------------------------------------------------------------
+// `createSale` es la venta interna (panel). El stock se descuenta con
+// `applyStockMovement`, que bloquea la fila del producto dentro de la
+// transacción. Así dos ventas simultáneas del mismo producto se serializan y no
+// pueden vender más unidades de las que existen.
+//
+// Después del commit se publica el catálogo actualizado por WebSocket y se
+// invalida la caché pública (ver `catalogEvents.js`).
+// ============================================================================
 
 export async function getSales(request, reply) {
   const { page, limit, offset } = calculatePagination(
@@ -69,6 +82,7 @@ export async function getSaleById(request, reply) {
 
   const [sales] = await pool.query(
     `SELECT s.*, c.full_name as customer_name, c.document_number as customer_document,
+            c.document_type as customer_document_type,
             c.phone as customer_phone, c.email as customer_email, c.address as customer_address,
             c.has_payment_proof as customer_has_proof, c.proof_image_url as customer_proof_url,
             u.full_name as created_by_name
@@ -84,9 +98,10 @@ export async function getSaleById(request, reply) {
   }
 
   const [items] = await pool.query(
-    `SELECT si.*, p.name as product_name, p.unit as product_unit
+    `SELECT si.*, COALESCE(p.name, si.description, 'Venta externa') as product_name,
+            COALESCE(p.unit, '') as product_unit
      FROM sale_items si
-     JOIN products p ON si.product_id = p.id
+     LEFT JOIN products p ON si.product_id = p.id
      WHERE si.sale_id = ?`,
     [id],
   );
@@ -116,7 +131,10 @@ export async function createSale(request, reply) {
       [customer_id, organizationId],
     );
     if (customerRows.length === 0) {
-      throw new Error("Cliente no encontrado");
+      throw new InventoryError("Cliente no encontrado", {
+        statusCode: 404,
+        code: "CUSTOMER_NOT_FOUND",
+      });
     }
 
     const invoice_number = generateInvoiceNumber();
@@ -124,27 +142,24 @@ export async function createSale(request, reply) {
     let subtotal = 0;
     const saleItems = [];
 
+    // Se leen precios y nombres, pero NO se decide aquí si hay stock: esa
+    // validación la hace `applyStockMovement` con la fila bloqueada, que es la
+    // única lectura confiable cuando hay compras concurrentes.
     for (const item of items) {
       const [products] = await connection.query(
-        "SELECT id, name, current_stock, current_price FROM products WHERE id = ? AND is_active = TRUE AND organization_id = ?",
+        "SELECT id, name, current_price FROM products WHERE id = ? AND is_active = TRUE AND organization_id = ?",
         [item.product_id, organizationId],
       );
 
       if (products.length === 0) {
-        throw new Error(
+        throw new InventoryError(
           `Producto con ID ${item.product_id} no encontrado o inactivo`,
+          { statusCode: 404, code: "PRODUCT_NOT_FOUND" },
         );
       }
 
       const product = products[0];
-
-      if (product.current_stock < item.quantity) {
-        throw new Error(
-          `Stock insuficiente para ${product.name}. Disponible: ${product.current_stock}, Solicitado: ${item.quantity}`,
-        );
-      }
-
-      const unitPrice = item.unit_price || product.current_price;
+      const unitPrice = item.unit_price ?? product.current_price;
       const total = unitPrice * item.quantity;
       subtotal += total;
 
@@ -158,6 +173,11 @@ export async function createSale(request, reply) {
 
     const tax = 0;
     const total = subtotal + tax;
+    const saleDate = sale_date || new Date();
+
+    // Ordenar por producto reduce el riesgo de interbloqueo (deadlock) cuando
+    // dos ventas tocan los mismos productos en distinto orden.
+    saleItems.sort((a, b) => a.product_id - b.product_id);
 
     const [saleResult] = await connection.query(
       `INSERT INTO sales (organization_id, invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
@@ -166,7 +186,7 @@ export async function createSale(request, reply) {
         organizationId,
         invoice_number,
         customer_id,
-        sale_date || new Date(),
+        saleDate,
         subtotal,
         tax,
         total,
@@ -180,6 +200,15 @@ export async function createSale(request, reply) {
 
     const saleId = saleResult.insertId;
 
+    await connection.query(
+      `UPDATE customers SET last_purchase_at = ?
+       WHERE id = ? AND organization_id = ?
+         AND (last_purchase_at IS NULL OR last_purchase_at < ?)`,
+      [saleDate, customer_id, organizationId, saleDate],
+    );
+
+    const stockChanges = [];
+
     for (const item of saleItems) {
       await connection.query(
         `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total)
@@ -187,35 +216,26 @@ export async function createSale(request, reply) {
         [saleId, item.product_id, item.quantity, item.unit_price, item.total],
       );
 
-      await connection.query(
-        "UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?",
-        [item.quantity, item.product_id, organizationId],
-      );
-
-      const [product] = await connection.query(
-        "SELECT current_stock FROM products WHERE id = ? AND organization_id = ?",
-        [item.product_id, organizationId],
-      );
-      const newStock = product[0].current_stock;
-      const previousStock = newStock + item.quantity;
-
-      await connection.query(
-        `INSERT INTO inventory_movements (organization_id, product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
-         VALUES (?, ?, 'salida', ?, ?, ?, ?, 'venta', ?, ?)`,
-        [
-          organizationId,
-          item.product_id,
-          item.quantity,
-          previousStock,
-          newStock,
-          `Venta ${invoice_number}`,
-          saleId,
-          created_by,
-        ],
-      );
+      // Descuento atómico. Si no alcanza, lanza InventoryError y toda la venta
+      // se revierte (no queda una factura sin stock).
+      const change = await applyStockMovement(connection, {
+        organizationId,
+        productId: item.product_id,
+        movementType: "salida",
+        quantity: item.quantity,
+        reason: `Venta ${invoice_number}`,
+        referenceType: "venta",
+        referenceId: saleId,
+        createdBy: created_by,
+      });
+      stockChanges.push(change);
     }
 
     await connection.commit();
+
+    // Caché + WebSocket: se ejecuta después del commit para que ningún cliente
+    // reciba un stock que luego se revierta.
+    await publishCatalogUpdate(organizationId, stockChanges, { connection });
 
     const [newSale] = await connection.query(
       `SELECT s.*, c.full_name as customer_name
@@ -228,6 +248,13 @@ export async function createSale(request, reply) {
     return reply.code(201).send({ sale: newSale[0] });
   } catch (error) {
     await connection.rollback();
+
+    if (error instanceof InventoryError) {
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        code: error.code,
+      });
+    }
     throw error;
   } finally {
     connection.release();
@@ -298,9 +325,10 @@ export async function validatePickupCode(request, reply) {
   }
 
   const [items] = await pool.query(
-    `SELECT si.*, p.name as product_name, p.unit as product_unit
+    `SELECT si.*, COALESCE(p.name, si.description, 'Venta externa') as product_name,
+            COALESCE(p.unit, '') as product_unit
      FROM sale_items si
-     JOIN products p ON si.product_id = p.id
+     LEFT JOIN products p ON si.product_id = p.id
      WHERE si.sale_id = ?`,
     [sales[0].id],
   );

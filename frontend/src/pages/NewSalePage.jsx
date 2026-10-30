@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Minus, Trash2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
@@ -39,7 +39,7 @@ export function NewSalePage() {
         setCustomers(customersRes.data.data);
         setProducts(productsRes.data.data);
         setFilteredProducts(productsRes.data.data);
-      } catch (error) {
+      } catch {
         toast.error('Error', 'No se pudieron cargar los datos');
       } finally {
         setLoading(false);

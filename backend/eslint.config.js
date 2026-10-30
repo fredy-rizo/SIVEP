@@ -19,7 +19,7 @@ export default [
       },
     },
     rules: {
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_|^e$|^err$" }],
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_|^e$|^err$" }],
       "no-undef": "error",
       "no-unreachable": "error",
       "no-dupe-keys": "error",

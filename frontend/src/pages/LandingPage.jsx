@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { Check, Truck, Shield, Headphones, Package } from "lucide-react";
+import { Truck, Shield, Headphones, Package } from "lucide-react";
 import { LogoShield } from "../components/LogoShield";
+import { BuyOnUnalButton } from "../components/BuyOnUnalButton";
 
 const products = [
   {
@@ -46,27 +47,27 @@ const products = [
 const steps = [
   {
     number: "01",
-    title: "Explora nuestros productos",
+    title: "Compra en la UNAL",
     description:
-      "Conoce nuestra variedad de productos frescos y de calidad de la Granja El Cairo.",
+      "Realiza tu compra en la página de pago virtual de la Universidad Nacional, con tarjeta o en caja.",
   },
   {
     number: "02",
-    title: "Selecciona y solicita",
+    title: "Guarda tu comprobante",
     description:
-      "Elige los productos que deseas y completa el formulario de compra con tus datos.",
+      "Recibirás un PDF con los datos de tu compra. Consérvalo, es tu prueba de pago.",
   },
   {
     number: "03",
-    title: "Envía tu comprobante",
+    title: "Regístrala en SIVEP",
     description:
-      "Adjunta la foto de tu comprobante de pago para validar tu pedido.",
+      "Sube el PDF en el formulario. Si pagaste en efectivo, agrega el código que te dieron en caja.",
   },
   {
     number: "04",
     title: "Recibe tu pedido",
     description:
-      "Coordinamos la entrega o retiro de tus productos frescos directamente de la granja.",
+      "Te entregamos un código de reclamo para coordinar la entrega o el retiro en la granja.",
   },
 ];
 
@@ -102,7 +103,7 @@ export function LandingPage() {
               <LogoShield className="w-10 h-10" />
               <span className="font-bold text-unal-primary text-xl">SIVEP</span>
             </div>
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden md:flex items-center gap-4 text-sm xl:text-base">
               <a
                 href="#productos"
                 className="text-unal-secondary hover:text-unal-primary font-medium transition-colors"
@@ -127,17 +128,24 @@ export function LandingPage() {
               >
                 Planes
               </Link>
-              <Link to="/formulario-compra" className="btn-primary">
-                Comprar ahora
-              </Link>
-            </div>
-            <div className="md:hidden">
               <Link
                 to="/formulario-compra"
-                className="btn-primary text-sm px-4 py-2"
+                className="text-unal-secondary hover:text-unal-primary font-medium transition-colors"
               >
-                Comprar
+                Registrar mi compra
               </Link>
+              <BuyOnUnalButton className="btn-primary">Comprar</BuyOnUnalButton>
+            </div>
+            <div className="flex items-center gap-2 md:hidden">
+              <Link
+                to="/formulario-compra"
+                className="btn-outline text-sm px-3 py-2"
+              >
+                Registrar
+              </Link>
+              <BuyOnUnalButton className="btn-primary text-sm px-3 py-2">
+                Comprar
+              </BuyOnUnalButton>
             </div>
           </div>
         </nav>
@@ -167,6 +175,9 @@ export function LandingPage() {
                 producidos en nuestra granja universitaria.
               </p>
               <div className="flex flex-wrap gap-4">
+                <BuyOnUnalButton className="inline-flex items-center justify-center rounded-lg bg-white px-8 py-3 text-lg font-medium text-unal-primary transition-colors hover:bg-unal-primary-light hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2">
+                  Comprar ahora
+                </BuyOnUnalButton>
                 <a
                   href="#productos"
                   className="btn-outline text-lg px-8 py-3 border-white text-white hover:bg-white hover:text-unal-primary dark:hover:bg-unal-primary dark:hover:text-white dark:hover:border-unal-primary"
@@ -190,7 +201,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-              {products.map((product, index) => (
+              {products.map((product) => (
                 <article
                   key={product.name}
                   className="card group overflow-hidden"
@@ -246,7 +257,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {steps.map((step, index) => (
+              {steps.map((step) => (
                 <div
                   key={step.number}
                   className="card p-6 text-center relative"
@@ -280,7 +291,7 @@ export function LandingPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {benefits.map((benefit, index) => (
+              {benefits.map((benefit) => (
                 <div key={benefit.title} className="card p-6 text-center">
                   <div className="w-14 h-14 mx-auto mb-4 bg-unal-accent/10 rounded-full flex items-center justify-center">
                     <benefit.icon
@@ -306,9 +317,20 @@ export function LandingPage() {
               ¿Listo para hacer tu pedido?
             </h2>
             <p className="text-white/80 mb-8 max-w-2xl mx-auto">
-              Completa el formulario y nos pondremos en contacto contigo para
-              coordinar la entrega.
+              Compra en la página de la Universidad Nacional y luego sube tu
+              comprobante en PDF para recibir tu código de reclamo.
             </p>
+            <div className="flex flex-wrap justify-center gap-4">
+              <BuyOnUnalButton className="inline-flex items-center justify-center rounded-lg bg-white px-8 py-3 text-lg font-medium text-unal-primary transition-colors hover:bg-unal-primary-light hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2">
+                Comprar en la UNAL
+              </BuyOnUnalButton>
+              <Link
+                to="/formulario-compra"
+                className="btn-outline text-lg px-8 py-3 border-white text-white hover:bg-white hover:text-unal-primary dark:hover:bg-unal-primary dark:hover:text-white dark:hover:border-unal-primary"
+              >
+                Ya compré, registrar mi compra
+              </Link>
+            </div>
           </div>
         </section>
       </main>
@@ -341,7 +363,7 @@ export function LandingPage() {
                     to="/formulario-compra"
                     className="hover:text-white transition-colors"
                   >
-                    Formulario de compra
+                    Registrar compra
                   </Link>
                 </li>
                 <li>

@@ -16,11 +16,10 @@ export function TermsPage() {
 
       <LegalSection title="2. Cómo comprar">
         <LegalList items={[
-          'Seleccione los productos y cantidades disponibles en el formulario público.',
-          'Complete sus datos de identificación y contacto.',
-          'Adjunte la foto o PDF del comprobante de pago.',
-          'Al enviar, el sistema crea su registro como cliente y su venta en estado pendiente.',
-          'Nuestro equipo verifica el pago y confirma la venta.',
+          'Realice su compra en la página de pago virtual de la Universidad Nacional de Colombia (o en caja).',
+          'Guarde el comprobante en PDF que le entrega la universidad.',
+          'Suba el PDF en el formulario público. Si pagó en efectivo, agregue el código que le dieron en caja.',
+          'El sistema lee el comprobante, crea su registro como cliente y registra la venta.',
           'Recibirá un código único de reclamo: preséntelo para recoger sus productos.'
         ]} />
       </LegalSection>
@@ -35,9 +34,9 @@ export function TermsPage() {
 
       <LegalSection title="4. Pagos">
         <p>
-          El pago se acredita mediante el comprobante que usted adjunta. La venta solo queda
-          confirmada cuando nuestro equipo verifica el pago. Mientras tanto su estado será
-          «pendiente».
+          El pago se acredita con el comprobante en PDF emitido por la Universidad Nacional.
+          La venta se registra como pagada cuando el comprobante es válido y no ha sido usado
+          antes. Cada comprobante y cada código de caja se aceptan una sola vez.
         </p>
       </LegalSection>
 

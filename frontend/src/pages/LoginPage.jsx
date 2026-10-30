@@ -4,7 +4,6 @@ import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/FormComponents";
 import { LogoShield } from "../components/LogoShield";
 import { Eye, EyeOff } from "lucide-react";
-import toast from "../utils/toast";
 
 export function LoginPage() {
   const { login } = useAuth();

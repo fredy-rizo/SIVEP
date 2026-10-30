@@ -9,7 +9,6 @@ import toast from '../utils/toast';
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
   const [filters, setFilters] = useState({ search: '', origin: '' });
   const [showFilters, setShowFilters] = useState(false);
@@ -17,7 +16,6 @@ export function CustomersPage() {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const fetchCustomers = async () => {
-    setLoading(true);
     try {
       const params = new URLSearchParams({
         page: pagination.page,
@@ -31,10 +29,8 @@ export function CustomersPage() {
         total: response.data.pagination.total,
         totalPages: response.data.pagination.totalPages
       }));
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudieron cargar los clientes');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -174,6 +170,13 @@ export function CustomersPage() {
                 <dt className="w-36 text-unal-secondary-light">Fecha registro:</dt>
                 <dd className="font-medium text-unal-secondary">{formatDate(selectedCustomer.created_at)}</dd>
               </div>
+              {selectedCustomer.last_purchase_at && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <CalendarDays className="w-4 h-4 text-unal-secondary-light flex-shrink-0" />
+                  <dt className="w-36 text-unal-secondary-light">Última compra:</dt>
+                  <dd className="font-medium text-unal-secondary">{formatDate(selectedCustomer.last_purchase_at)}</dd>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <User className="w-4 h-4 text-unal-secondary-light flex-shrink-0" />
                 <dt className="w-36 text-unal-secondary-light">Origen:</dt>

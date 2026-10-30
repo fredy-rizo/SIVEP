@@ -31,13 +31,6 @@ import toast from "../utils/toast";
 // un cambio de plan (pago manual: un asesor confirma y activa).
 // ============================================================================
 
-function featureLabel(feature) {
-  if (feature.code === "limit.users") {
-    return feature.limit ? `Hasta ${feature.limit} usuarios` : "Usuarios ilimitados";
-  }
-  return feature.name;
-}
-
 export function MyPlanPage() {
   const { plan, refresh, isSuperAdmin } = usePlan();
   const [catalog, setCatalog] = useState({ plans: [], services: [] });
@@ -68,7 +61,7 @@ export function MyPlanPage() {
       try {
         const res = await api.get("/billing/invoices");
         setInvoices(res.data.invoices || []);
-      } catch (error) {
+      } catch {
         // Silencioso: el historial es informativo.
       }
     };

@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-export function KPICard({ title, value, change, changeLabel, icon, iconBg, trend = 'neutral' }) {
+export function KPICard({ title, value, change, changeLabel, icon, iconBg }) {
   const trendIcons = {
     up: <TrendingUp className="w-4 h-4" />,
     down: <TrendingDown className="w-4 h-4" />,

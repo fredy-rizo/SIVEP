@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Filter, Package, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import api from '../utils/api';
 import { formatCOP, formatDate } from '../utils/formatters';
@@ -6,6 +6,7 @@ import { DataTable } from '../components/DataTable';
 import { Modal } from '../components/Modal';
 import { Input, Select, FormError } from '../components/FormComponents';
 import toast from '../utils/toast';
+import { useStockUpdates } from '../hooks/useStockUpdates';
 
 const MOVEMENT_TYPES = [
   { value: 'entrada', label: 'Entrada', icon: ArrowUp, color: 'text-green-600' },
@@ -33,7 +34,6 @@ export function InventoryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showMovementFilters, setShowMovementFilters] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
   const [movementForm, setMovementForm] = useState({
     product_id: '',
     movement_type: 'entrada',
@@ -43,7 +43,7 @@ export function InventoryPage() {
     reference_id: ''
   });
   const [movementErrors, setMovementErrors] = useState({});
-  const [selectedProductForMovement, setSelectedProductForMovement] = useState(null);
+  const [, setSelectedProductForMovement] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -64,7 +64,7 @@ export function InventoryPage() {
         total: movementsRes.data.pagination.total,
         totalPages: movementsRes.data.pagination.totalPages
       }));
-    } catch (error) {
+    } catch {
       toast.error('Error', 'No se pudieron cargar los datos');
     } finally {
       setLoading(false);
@@ -74,6 +74,20 @@ export function InventoryPage() {
   useEffect(() => {
     fetchData();
   }, [pagination.page, movementPagination.page, filters, movementFilters]);
+
+  // Refresco en vivo del panel: ventas, ajustes o pedidos vencidos de la misma
+  // organización llegan por WebSocket. Se agrupan con un pequeño debounce para
+  // no lanzar dos peticiones por cada evento en ráfaga.
+  const refreshTimer = useRef(null);
+  const realtimeToken = localStorage.getItem('token');
+  useStockUpdates(
+    () => {
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => fetchData(), 400);
+    },
+    { token: realtimeToken },
+  );
+  useEffect(() => () => clearTimeout(refreshTimer.current), []);
 
   const validateMovement = () => {
     const newErrors = {};

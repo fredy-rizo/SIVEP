@@ -3,9 +3,11 @@ import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import { AppLayout } from './layouts/AppLayout';
 import { LandingPage } from './pages/LandingPage';
 import { PublicFormPage } from './pages/PublicFormPage';
+import { CashPurchasePage } from './pages/CashPurchasePage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SalesPage } from './pages/SalesPage';
+import { CashClaimsPage } from './pages/CashClaimsPage';
 import { NewSalePage } from './pages/NewSalePage';
 import { ProductsPage } from './pages/ProductsPage';
 import { CustomersPage } from './pages/CustomersPage';
@@ -23,7 +25,7 @@ import { CookieBanner } from './components/CookieBanner';
 import { useAuth } from './context/AuthContext';
 
 function PrivateRoutes() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -43,6 +45,7 @@ function PrivateRoutes() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/ventas" element={<SalesPage />} />
         <Route path="/ventas/nueva" element={<NewSalePage />} />
+        <Route path="/efectivo" element={<CashClaimsPage />} />
         <Route path="/productos" element={<ProductsPage />} />
         <Route path="/clientes" element={<CustomersPage />} />
         <Route path="/inventario" element={<InventoryPage />} />
@@ -70,7 +73,9 @@ function PublicRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/formulario-compra" element={<PublicFormPage />} />
+      <Route path="/formulario-compra/efectivo" element={<CashPurchasePage />} />
       <Route path="/planes" element={<PlansPage />} />
+      <Route path="/pagar-pedido" element={<Navigate to="/formulario-compra" replace />} />
       <Route path="/login" element={
         <PublicRoute>
           <LoginPage />

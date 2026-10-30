@@ -65,6 +65,6 @@ export function buildPaginatedResponse(data, total, page, limit) {
 }
 
 export function sanitizeUser(user) {
-  const { password, ...safeUser } = user;
+  const { password: _password, ...safeUser } = user;
   return safeUser;
 }

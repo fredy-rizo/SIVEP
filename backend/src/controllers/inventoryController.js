@@ -1,7 +1,24 @@
+// ============================================================================
+// CONTROLADOR DE INVENTARIO — SIVEP
+// ----------------------------------------------------------------------------
+// Expone tres operaciones:
+//   GET  /api/inventory           → productos con stock (paginado/filtrable).
+//   POST /api/inventory/movements → entrada, salida o ajuste manual.
+//   GET  /api/inventory/movements → historial de movimientos.
+//
+// Las escrituras delegan en `inventoryService`, que bloquea la fila del producto
+// y evita condiciones de carrera. Después del commit se publica el cambio por
+// WebSocket para que el escaparate y el panel se actualicen solos.
+// ============================================================================
+
 import pool from '../config/database.js';
 import { inventoryMovementSchema } from '../validators/index.js';
 import { calculatePagination, buildPaginatedResponse } from '../utils/helpers.js';
+import { applyStockMovement, InventoryError } from '../services/inventoryService.js';
+import { publishCatalogUpdate } from '../services/catalogEvents.js';
 
+// Lista de productos de la organización con filtros de búsqueda, categoría y
+// stock bajo. Solo devuelve productos activos.
 export async function getInventory(request, reply) {
   const { page, limit, offset } = calculatePagination(request.query.page, request.query.limit);
   const { search, category, low_stock } = request.query;
@@ -38,6 +55,9 @@ export async function getInventory(request, reply) {
   return reply.send(buildPaginatedResponse(products, countResult[0].total, page, limit));
 }
 
+// Registra un movimiento manual de inventario dentro de una transacción.
+// El servicio valida el stock real con la fila bloqueada; así dos salidas
+// simultáneas no pueden dejar el inventario en negativo.
 export async function createInventoryMovement(request, reply) {
   const { error, value } = inventoryMovementSchema.validate(request.body);
   if (error) {
@@ -52,62 +72,52 @@ export async function createInventoryMovement(request, reply) {
   
   try {
     await connection.beginTransaction();
-    
-    const [products] = await connection.query(
-      'SELECT id, name, current_stock FROM products WHERE id = ? AND organization_id = ?',
-      [product_id, organizationId]
-    );
-    
-    if (products.length === 0) {
-      return reply.code(404).send({ error: 'Producto no encontrado' });
-    }
-    
-    const product = products[0];
-    const previousStock = product.current_stock;
-    let newStock = previousStock;
-    
-    if (movement_type === 'entrada') {
-      newStock = previousStock + quantity;
-    } else if (movement_type === 'salida') {
-      if (previousStock < quantity) {
-        throw new Error(`Stock insuficiente. Disponible: ${previousStock}, Solicitado: ${quantity}`);
-      }
-      newStock = previousStock - quantity;
-    } else if (movement_type === 'ajuste') {
-      newStock = quantity;
-    }
-    
-    await connection.query(
-      'UPDATE products SET current_stock = ? WHERE id = ? AND organization_id = ?',
-      [newStock, product_id, organizationId]
-    );
-    
-    const [movementResult] = await connection.query(
-      `INSERT INTO inventory_movements (organization_id, product_id, movement_type, quantity, previous_stock, new_stock, reason, reference_type, reference_id, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [organizationId, product_id, movement_type, quantity, previousStock, newStock, reason, reference_type, reference_id || null, created_by]
-    );
-    
+
+    // Operación atómica: valida, actualiza products y escribe el movimiento.
+    const change = await applyStockMovement(connection, {
+      organizationId,
+      productId: product_id,
+      movementType: movement_type,
+      quantity,
+      reason,
+      referenceType: reference_type || 'ajuste_manual',
+      referenceId: reference_id || null,
+      createdBy: created_by,
+    });
+
     await connection.commit();
-    
+
+    // Fuera de la transacción: caché y WebSocket solo ven datos confirmados.
+    await publishCatalogUpdate(organizationId, [change], { connection });
+
     const [newMovement] = await connection.query(
       `SELECT im.*, p.name as product_name, p.unit as product_unit, u.full_name as created_by_name
        FROM inventory_movements im
        JOIN products p ON im.product_id = p.id
        JOIN users u ON im.created_by = u.id
        WHERE im.id = ? AND im.organization_id = ?`,
-      [movementResult.insertId, organizationId]
+      [change.movementId, organizationId]
     );
     
     return reply.code(201).send({ movement: newMovement[0] });
   } catch (error) {
     await connection.rollback();
+
+    // Los errores de stock tienen status propio (404/409) y un mensaje claro
+    // para el operador; el resto se deja al manejador global.
+    if (error instanceof InventoryError) {
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        code: error.code,
+      });
+    }
     throw error;
   } finally {
     connection.release();
   }
 }
 
+// Historial de movimientos con filtros por producto, tipo y fechas.
 export async function getInventoryMovements(request, reply) {
   const { page, limit, offset } = calculatePagination(request.query.page, request.query.limit);
   const { product_id, movement_type, start_date, end_date } = request.query;

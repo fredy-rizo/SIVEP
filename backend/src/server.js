@@ -19,10 +19,13 @@ import salesRoutes from "./routes/salesRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import reportsRoutes from "./routes/reportsRoutes.js";
 import publicRoutes from "./routes/publicRoutes.js";
+import cashClaimsRoutes from "./routes/cashClaimsRoutes.js";
 import cookiesRoutes from "./routes/cookiesRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import adminBillingRoutes from "./routes/adminBillingRoutes.js";
 import { startSubscriptionLifecycle } from "./services/subscriptionLifecycle.js";
+import { startPendingOrdersLifecycle } from "./services/pendingOrdersLifecycle.js";
+import { registerStockHub, getRealtimeStats } from "./realtime/stockHub.js";
 
 dotenv.config();
 
@@ -96,6 +99,11 @@ async function start() {
       secret: process.env.JWT_SECRET,
     });
 
+    // Canal WebSocket de stock en tiempo real. Se registra después de JWT y
+    // antes de las rutas para que /ws pueda validar el token de los usuarios
+    // internos y resolver la organización pública de los visitantes.
+    await registerStockHub(fastify);
+
     await fastify.register(multipart, {
       limits: {
         fileSize: 10 * 1024 * 1024,
@@ -124,12 +132,19 @@ async function start() {
     fastify.register(inventoryRoutes, { prefix: "/api/inventory" });
     fastify.register(reportsRoutes, { prefix: "/api/reports" });
     fastify.register(publicRoutes, { prefix: "/api/public" });
+    fastify.register(cashClaimsRoutes, { prefix: "/api/cash-claims" });
     fastify.register(cookiesRoutes, { prefix: "/api/cookies" });
     fastify.register(billingRoutes, { prefix: "/api/billing" });
     fastify.register(adminBillingRoutes, { prefix: "/api/admin" });
 
+    // Salud del servicio + estado del canal en tiempo real. Útil para saber si
+    // hay clientes conectados sin abrir una consola de base de datos.
     fastify.get("/api/health", async () => {
-      return { status: "ok", timestamp: new Date().toISOString() };
+      return {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        realtime: getRealtimeStats(),
+      };
     });
 
     // Ping liviano anti-suspensión (Render/Aiven): además de responder,
@@ -166,6 +181,15 @@ async function start() {
         return reply.code(400).send({ error: "Referencia inválida" });
       }
 
+      // Errores de negocio (stock insuficiente, producto inexistente, etc.)
+      // traen su propio status y código; no deben reportarse como 500.
+      if (error.statusCode && error.statusCode < 500) {
+        return reply.code(error.statusCode).send({
+          error: error.message,
+          code: error.code || null,
+        });
+      }
+
       return reply.code(500).send({ error: "Error interno del servidor" });
     });
 
@@ -175,6 +199,10 @@ async function start() {
     // Ciclo de vida de suscripciones: expira/cancela las vencidas. Se ejecuta
     // una vez al arrancar y luego periódicamente (no bloquea el servidor).
     startSubscriptionLifecycle();
+
+    // Ciclo de vida de pedidos en efectivo: marca vencidos los pendientes y
+    // devuelve el stock. Se ejecuta una vez al arrancar y luego periódicamente.
+    startPendingOrdersLifecycle();
 
     console.log(`Servidor corriendo en http://localhost:${port}`);
   } catch (err) {

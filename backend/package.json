@@ -15,7 +15,11 @@
     "db:add-pickup": "node src/database/add-pickup-columns.js",
     "db:add-ti": "node src/database/add-document-ti.js",
     "db:add-billing": "node src/database/add-billing-schema.js",
-    "db:add-multitenant": "node src/database/add-multitenant-schema.js"
+    "db:add-multitenant": "node src/database/add-multitenant-schema.js",
+    "db:add-payments": "node src/database/add-payment-columns.js",
+    "db:add-external-sales": "node src/database/add-external-sales.js",
+    "db:add-cash-claims": "node src/database/add-cash-claims.js",
+    "db:run-pending-orders": "node src/database/run-pending-orders.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",
@@ -25,6 +29,7 @@
     "@fastify/multipart": "^8.2.0",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/static": "^7.0.4",
+    "@fastify/websocket": "^10.0.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.11.0",
     "dotenv": "^16.4.5",
@@ -32,7 +37,8 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "mysql2": "^3.11.0"
+    "mysql2": "^3.11.0",
+    "pdfjs-dist": "^6.4.299"
   },
   "devDependencies": {
     "eslint": "^10.13.0"

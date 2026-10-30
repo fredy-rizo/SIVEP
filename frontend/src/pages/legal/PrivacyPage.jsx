@@ -15,12 +15,12 @@ export function PrivacyPage() {
       </LegalSection>
 
       <LegalSection title="2. Datos que recolectamos (solo los necesarios)">
-        <p>En el formulario público de compra solicitamos únicamente:</p>
+        <p>En el formulario público de compra tomamos del comprobante en PDF únicamente:</p>
         <LegalList items={[
           'Identificación: tipo y número de documento.',
-          'Contacto: nombre completo, número de celular y correo electrónico (opcional).',
-          'Compra: productos y cantidades seleccionadas.',
-          'Comprobante de pago: foto o PDF del comprobante para verificar la transacción.'
+          'Contacto: nombre completo, número de celular y correo electrónico.',
+          'Compra: fecha, descripciones y valor pagado.',
+          'Comprobante de pago: PDF emitido por la Universidad Nacional para verificar la transacción.'
         ]} />
         <p>
           Las cuentas de administración (nombre, correo institucional y rol) son creadas

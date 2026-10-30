@@ -15,7 +15,15 @@
 import pool from "../config/database.js";
 import { formatCOP } from "../utils/helpers.js";
 import { resolveUserPlan, countActiveUsers } from "../middleware/plan.js";
-import { billingRequestSchema, serviceRequestSchema } from "../validators/index.js";
+import {
+  billingRequestSchema,
+  serviceRequestSchema,
+} from "../validators/index.js";
+import { isCouponApplicable, computeCouponDiscount } from "../utils/coupon.js";
+import {
+  scheduleCancellation,
+  resumeSubscription,
+} from "../services/subscriptionLifecycle.js";
 
 // Catálogo público de planes + servicios de valor agregado. Sin autenticación:
 // alimenta la página de precios abierta al público.
@@ -84,6 +92,7 @@ export async function getMyPlan(request, reply) {
   let usageUsers = 0;
   let pendingRequest = null;
   let serviceOrders = [];
+  let subscriptionRow = null;
 
   if (resolved.organizationId) {
     const [orgRows] = await pool.query(
@@ -93,6 +102,20 @@ export async function getMyPlan(request, reply) {
     );
     organization = orgRows[0] || null;
     usageUsers = await countActiveUsers(resolved.organizationId);
+
+    // Suscripción vigente con columnas de ciclo de vida (cancelación/trial).
+    const [subRows] = await pool.query(
+      `SELECT status, billing_cycle, amount, current_period_start,
+              current_period_end, cancel_at_period_end, canceled_at, trial_ends_at
+       FROM subscriptions
+       WHERE organization_id = ?
+         AND status IN ('active', 'trialing')
+         AND current_period_end >= CURDATE()
+       ORDER BY current_period_end DESC, id DESC
+       LIMIT 1`,
+      [resolved.organizationId],
+    );
+    subscriptionRow = subRows[0] || null;
 
     const [pending] = await pool.query(
       `SELECT id, plan_code, billing_cycle, amount, reference, status, created_at
@@ -136,7 +159,7 @@ export async function getMyPlan(request, reply) {
     }));
   }
 
-  const sub = resolved.subscription;
+  const sub = subscriptionRow || resolved.subscription;
   return reply.send({
     organization,
     plan: resolved.plan,
@@ -150,6 +173,9 @@ export async function getMyPlan(request, reply) {
           amountFormatted: formatCOP(sub.amount),
           currentPeriodStart: sub.current_period_start,
           currentPeriodEnd: sub.current_period_end,
+          cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+          canceledAt: sub.canceled_at || null,
+          trialEndsAt: sub.trial_ends_at || null,
         }
       : null,
     features: [...resolved.features],
@@ -188,8 +214,39 @@ export async function requestPlanChange(request, reply) {
     return reply.code(404).send({ error: "Plan no encontrado" });
   }
   const plan = plans[0];
-  const amount =
-    value.billing_cycle === "yearly" ? plan.price_yearly : plan.price_monthly;
+  const baseAmount = Number(
+    value.billing_cycle === "yearly" ? plan.price_yearly : plan.price_monthly,
+  );
+
+  // Cupón opcional: se valida y se calcula el descuento ANTES de registrar.
+  let coupon = null;
+  let discount = 0;
+  let amount = baseAmount;
+  if (value.coupon_code) {
+    const code = String(value.coupon_code).trim().toUpperCase();
+    const [couponRows] = await pool.query(
+      "SELECT * FROM coupons WHERE code = ? LIMIT 1",
+      [code],
+    );
+    const found = couponRows[0];
+    if (!found) {
+      return reply.code(404).send({ error: "El cupón no existe" });
+    }
+    if (
+      !isCouponApplicable(found, {
+        planCode: value.plan_code,
+        today: new Date(),
+        redeemedCount: Number(found.redeemed_count) || 0,
+      })
+    ) {
+      return reply
+        .code(422)
+        .send({ error: "El cupón no es válido para este plan o ya expiró" });
+    }
+    discount = computeCouponDiscount(found, baseAmount);
+    amount = baseAmount - discount;
+    coupon = found;
+  }
 
   // Evita duplicar una solicitud idéntica todavía sin resolver.
   const [duplicate] = await pool.query(
@@ -208,14 +265,16 @@ export async function requestPlanChange(request, reply) {
   const [result] = await pool.query(
     `INSERT INTO payments
        (organization_id, plan_code, billing_cycle, amount, method, status,
-        reference, notes, created_by)
-     VALUES (?, ?, ?, ?, 'manual', 'pendiente', ?, ?, ?)`,
+        reference, coupon_code, discount_amount, notes, created_by)
+     VALUES (?, ?, ?, ?, 'manual', 'pendiente', ?, ?, ?, ?, ?)`,
     [
       resolved.organizationId,
       value.plan_code,
       value.billing_cycle,
       amount,
       reference,
+      coupon ? coupon.code : null,
+      discount,
       value.notes || null,
       request.user.id,
     ],
@@ -228,7 +287,12 @@ export async function requestPlanChange(request, reply) {
       id: result.insertId,
       planCode: value.plan_code,
       billingCycle: value.billing_cycle,
-      amount: Number(amount),
+      baseAmount,
+      baseAmountFormatted: formatCOP(baseAmount),
+      discount,
+      discountFormatted: formatCOP(discount),
+      couponCode: coupon ? coupon.code : null,
+      amount,
       amountFormatted: formatCOP(amount),
       reference,
       status: "pendiente",
@@ -298,5 +362,98 @@ export async function requestService(request, reply) {
       amountFormatted: formatCOP(service.price),
       status: "solicitado",
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AUTOSERVICIO: cancelar, reactivar y consultar facturas de la organización.
+// ---------------------------------------------------------------------------
+
+// Cancela al FINAL del periodo (no corta el acceso de inmediato).
+export async function cancelMySubscription(request, reply) {
+  const resolved = await resolveUserPlan(request.user);
+  if (resolved.isSuperAdmin || !resolved.organizationId) {
+    return reply.code(400).send({
+      error: "Solo una cuenta de organización puede gestionar su suscripción",
+    });
+  }
+
+  const changed = await scheduleCancellation(resolved.organizationId);
+  if (!changed) {
+    return reply
+      .code(404)
+      .send({ error: "No hay una suscripción activa para cancelar" });
+  }
+
+  const [rows] = await pool.query(
+    `SELECT current_period_end FROM subscriptions
+     WHERE organization_id = ? AND cancel_at_period_end = TRUE
+       AND status IN ('active', 'trialing')
+     ORDER BY current_period_end DESC LIMIT 1`,
+    [resolved.organizationId],
+  );
+
+  return reply.send({
+    message:
+      "Tu suscripción se cancelará al final del periodo actual. Puedes reactivarla antes de esa fecha.",
+    cancelAtPeriodEnd: true,
+    currentPeriodEnd: rows[0]?.current_period_end || null,
+  });
+}
+
+// Reactiva una suscripción cuya cancelación aún no se ha hecho efectiva.
+export async function resumeMySubscription(request, reply) {
+  const resolved = await resolveUserPlan(request.user);
+  if (resolved.isSuperAdmin || !resolved.organizationId) {
+    return reply.code(400).send({
+      error: "Solo una cuenta de organización puede gestionar su suscripción",
+    });
+  }
+
+  const changed = await resumeSubscription(resolved.organizationId);
+  if (!changed) {
+    return reply
+      .code(404)
+      .send({ error: "No hay una cancelación programada para reactivar" });
+  }
+
+  return reply.send({
+    message: "Tu suscripción seguirá activa. Cancelación deshecha.",
+    cancelAtPeriodEnd: false,
+  });
+}
+
+// Historial de pagos/solicitudes (facturas) de la organización.
+export async function getMyInvoices(request, reply) {
+  const resolved = await resolveUserPlan(request.user);
+  if (!resolved.organizationId) {
+    return reply.send({ invoices: [] });
+  }
+
+  const [rows] = await pool.query(
+    `SELECT id, plan_code, billing_cycle, amount, discount_amount, coupon_code,
+            status, reference, paid_at, created_at
+     FROM payments
+     WHERE organization_id = ?
+     ORDER BY created_at DESC
+     LIMIT 100`,
+    [resolved.organizationId],
+  );
+
+  return reply.send({
+    invoices: rows.map((r) => ({
+      id: r.id,
+      planCode: r.plan_code,
+      billingCycle: r.billing_cycle,
+      amount: Number(r.amount),
+      amountFormatted: formatCOP(r.amount),
+      discount: Number(r.discount_amount),
+      discountFormatted: formatCOP(r.discount_amount),
+      couponCode: r.coupon_code,
+      status: r.status,
+      reference: r.reference,
+      paidAt: r.paid_at,
+      createdAt: r.created_at,
+    })),
   });
 }

@@ -250,9 +250,12 @@ habilitan según el plan contratado (ver [Monetización](#monetización)).
 
 ### Facturación y planes
 - `GET /api/billing/plans` — catálogo público (sin auth)
-- `GET /api/billing/me` — plan, features, límites, uso y órdenes de servicio
-- `POST /api/billing/request` — solicitar cambio/ascenso de plan (pago manual)
+- `GET /api/billing/me` — plan, features, límites, uso, suscripción y órdenes
+- `GET /api/billing/invoices` — historial de facturas/pagos de la organización
+- `POST /api/billing/request` — solicitar cambio/ascenso de plan (pago manual, cupón opcional)
 - `POST /api/billing/service-request` — solicitar servicio de valor agregado
+- `POST /api/billing/subscription/cancel` — cancelar al final del periodo
+- `POST /api/billing/subscription/resume` — deshacer la cancelación programada
 
 ### Cookies / consentimiento
 - `GET /api/cookies/consent` — lee la decisión guardada (`unknown` si no hay)
@@ -292,6 +295,22 @@ con enlace a `/planes`.
 > La **pasarela de pago** (Wompi/PayU/PSE) está prevista como fase posterior; hoy el
 > cobro es manual.
 
+### Ciclo de vida, pruebas y cupones
+
+- **Ciclo de vida:** un servicio (`services/subscriptionLifecycle.js`) expira las
+  suscripciones vencidas y aplica las cancelaciones programadas. Se ejecuta al
+  arrancar el servidor, cada 6 horas y a demanda desde el panel
+  (`POST /api/admin/subscriptions/run-lifecycle`).
+- **Cancelación de autoservicio:** el cliente puede cancelar al final del periodo
+  y **reactivar** antes de que se haga efectiva (`/billing/subscription/cancel|resume`).
+- **Pruebas (trials):** cada plan define `trial_days`; una suscripción creada en
+  estado `trialing` consume ese periodo y expira si no se convierte.
+- **Cupones:** descuento porcentual o fijo, opcionalmente restringido a un plan,
+  con tope de canjes y vigencia. Se aplican en la solicitud y se registran sus
+  canjes en `coupon_redemptions`.
+- **Planes a medida:** el super_admin puede crear planes con código, precios,
+  prueba y features seleccionadas (`POST /api/admin/plans`).
+
 ### Licencias on-premise
 
 Las licencias se firman con `LICENSE_SECRET` (o `JWT_SECRET` si no se define) y se
@@ -301,13 +320,17 @@ verifican con `POST /api/admin/licenses/verify`; pueden revocarse con
 ### Administración (solo `super_admin`, prefijo `/api/admin`)
 
 - `GET /api/admin/overview` — KPIs (organizaciones, suscripciones, pagos, licencias)
+- `GET /api/admin/metrics` — métricas SaaS (MRR, ARR, ARPU, churn, trials, ingresos)
 - `GET|POST /api/admin/organizations` · `PUT /api/admin/organizations/:id`
-- `GET|POST /api/admin/subscriptions` · `PATCH /api/admin/subscriptions/:id`
+- `GET|POST /api/admin/subscriptions` · `PATCH /api/admin/subscriptions/:id` ·
+  `POST /api/admin/subscriptions/run-lifecycle` (expira/cancela vencidas)
 - `GET /api/admin/payments` · `POST /api/admin/payments/:id/confirm|reject`
+- `GET|POST /api/admin/coupons` · `PATCH /api/admin/coupons/:id` · `DELETE /api/admin/coupons/:id`
 - `GET|POST /api/admin/licenses` · `POST /api/admin/licenses/verify` ·
   `POST /api/admin/licenses/:id/revoke`
 - `GET /api/admin/service-orders` · `PATCH /api/admin/service-orders/:id`
-- `GET /api/admin/plans` · `PATCH /api/admin/plans/:code`
+- `GET /api/admin/plans` · `POST /api/admin/plans` (plan a medida) ·
+  `PATCH /api/admin/plans/:code` · `GET /api/admin/features`
 
 ---
 
@@ -390,6 +413,8 @@ VITE_API_URL=http://localhost:3000/api
 ```bash
 pnpm start                    # Producción
 pnpm run dev                  # Desarrollo con watch
+pnpm test                     # Pruebas unitarias (node:test)
+pnpm run lint                 # Linter (ESLint)
 pnpm run db:migrate           # Migraciones base
 pnpm run db:seed              # Seed inicial
 pnpm run db:add-billing       # Tablas de monetización (idempotente)
@@ -402,6 +427,7 @@ pnpm run db:add-multitenant   # Aislamiento multi-tenant (idempotente)
 pnpm run dev       # Desarrollo
 pnpm run build     # Build de producción
 pnpm run preview   # Preview del build
+pnpm run lint      # Linter (ESLint)
 ```
 
 ---
@@ -468,6 +494,19 @@ server {
   opcionales; el consentimiento se registra y respeta.
 - Operativo pendiente: copias de seguridad cifradas de MySQL y procedimiento
   formal de supresión de datos.
+
+---
+
+## Calidad y operación
+
+- **Pruebas:** el backend incluye pruebas unitarias de la lógica pura (cupones y
+  licencias) con el runner nativo de Node (`pnpm test`). No requieren base de datos.
+- **Linter:** ambos paquetes usan ESLint (flat config) con reglas orientadas a
+  errores reales (`pnpm run lint`).
+- **Integración continua:** `.github/workflows/ci.yml` ejecuta lint + tests del
+  backend y lint + build del frontend en cada push y pull request.
+- **Ciclo de vida:** el temporizador de suscripciones corre dentro del proceso del
+  servidor (se ejecuta al arrancar y cada 6 horas).
 
 ---
 

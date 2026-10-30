@@ -11,6 +11,9 @@ import {
   X,
   Ban,
   RefreshCw,
+  BarChart3,
+  Tag,
+  PlayCircle,
 } from "lucide-react";
 import api from "../utils/api";
 import { formatCOP, formatDate } from "../utils/formatters";
@@ -69,44 +72,55 @@ export function AdminBillingPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     overview: null,
+    metrics: null,
     organizations: [],
     subscriptions: [],
     payments: [],
     licenses: [],
     serviceOrders: [],
     plans: [],
+    coupons: [],
+    features: [],
   });
   const [paymentFilter, setPaymentFilter] = useState("");
-  const [modal, setModal] = useState(null); // 'org' | 'sub' | 'license' | 'plan'
+  const [modal, setModal] = useState(null); // 'org' | 'sub' | 'license' | 'plan' | 'plan-new' | 'coupon'
   const [submitting, setSubmitting] = useState(false);
   const [issuedKey, setIssuedKey] = useState(null);
 
   const [orgForm, setOrgForm] = useState({ name: "", nit: "", city: "", contact_email: "", contact_phone: "" });
   const [subForm, setSubForm] = useState({ organization_id: "", plan_code: "", billing_cycle: "monthly", status: "active" });
   const [licenseForm, setLicenseForm] = useState({ organization_id: "", plan_code: "", type: "perpetual", seats: "", expires_at: "" });
-  const [planForm, setPlanForm] = useState({ code: null, price_monthly: 0, price_yearly: 0, is_active: true });
+  const [planForm, setPlanForm] = useState({ code: null, price_monthly: 0, price_yearly: 0, trial_days: 0, is_active: true });
+  const [planNewForm, setPlanNewForm] = useState({ code: "", name: "", description: "", price_monthly: 0, price_yearly: 0, trial_days: 0, features: {} });
+  const [couponForm, setCouponForm] = useState({ id: null, code: "", description: "", discount_type: "percent", discount_value: 0, plan_code: "", max_redemptions: "", valid_from: "", valid_until: "", is_active: true });
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [overview, orgs, subs, payments, licenses, orders, plans] =
+      const [overview, metrics, orgs, subs, payments, licenses, orders, plans, coupons, features] =
         await Promise.all([
           api.get("/admin/overview"),
+          api.get("/admin/metrics"),
           api.get("/admin/organizations"),
           api.get("/admin/subscriptions"),
           api.get(`/admin/payments${paymentFilter ? `?status=${paymentFilter}` : ""}`),
           api.get("/admin/licenses"),
           api.get("/admin/service-orders"),
           api.get("/admin/plans"),
+          api.get("/admin/coupons"),
+          api.get("/admin/features"),
         ]);
       setData({
         overview: overview.data,
+        metrics: metrics.data,
         organizations: orgs.data.organizations || [],
         subscriptions: subs.data.subscriptions || [],
         payments: payments.data.payments || [],
         licenses: licenses.data.licenses || [],
         serviceOrders: orders.data.serviceOrders || [],
         plans: plans.data.plans || [],
+        coupons: coupons.data.coupons || [],
+        features: features.data.features || [],
       });
     } catch (error) {
       toast.error("Error", error.response?.data?.error || "No se pudo cargar el panel");
@@ -137,8 +151,28 @@ export function AdminBillingPage() {
         code: payload.code,
         price_monthly: payload.price_monthly,
         price_yearly: payload.price_yearly,
+        trial_days: payload.trial_days ?? 0,
         is_active: !!payload.is_active,
       });
+    } else if (type === "plan-new") {
+      setPlanNewForm({ code: "", name: "", description: "", price_monthly: 0, price_yearly: 0, trial_days: 0, features: {} });
+    } else if (type === "coupon") {
+      setCouponForm(
+        payload
+          ? {
+              id: payload.id,
+              code: payload.code,
+              description: payload.description || "",
+              discount_type: payload.discount_type,
+              discount_value: Number(payload.discount_value),
+              plan_code: payload.plan_code || "",
+              max_redemptions: payload.max_redemptions ?? "",
+              valid_from: payload.valid_from ? String(payload.valid_from).slice(0, 10) : "",
+              valid_until: payload.valid_until ? String(payload.valid_until).slice(0, 10) : "",
+              is_active: !!payload.is_active,
+            }
+          : { id: null, code: "", description: "", discount_type: "percent", discount_value: 0, plan_code: "", max_redemptions: "", valid_from: "", valid_until: "", is_active: true },
+      );
     }
     setModal(type);
   };
@@ -171,9 +205,39 @@ export function AdminBillingPage() {
         await api.patch(`/admin/plans/${planForm.code}`, {
           price_monthly: Number(planForm.price_monthly),
           price_yearly: Number(planForm.price_yearly),
+          trial_days: Number(planForm.trial_days),
           is_active: planForm.is_active,
         });
         toast.success("Plan actualizado");
+      } else if (modal === "plan-new") {
+        await api.post("/admin/plans", {
+          code: planNewForm.code.trim().toLowerCase(),
+          name: planNewForm.name,
+          description: planNewForm.description,
+          price_monthly: Number(planNewForm.price_monthly),
+          price_yearly: Number(planNewForm.price_yearly),
+          trial_days: Number(planNewForm.trial_days),
+          features: planNewForm.features,
+        });
+        toast.success("Plan creado");
+      } else if (modal === "coupon") {
+        const payload = {
+          description: couponForm.description || null,
+          discount_type: couponForm.discount_type,
+          discount_value: Number(couponForm.discount_value),
+          plan_code: couponForm.plan_code || null,
+          max_redemptions: couponForm.max_redemptions ? Number(couponForm.max_redemptions) : null,
+          valid_from: couponForm.valid_from || null,
+          valid_until: couponForm.valid_until || null,
+          is_active: couponForm.is_active,
+        };
+        if (couponForm.id) {
+          await api.patch(`/admin/coupons/${couponForm.id}`, payload);
+          toast.success("Cupón actualizado");
+        } else {
+          await api.post("/admin/coupons", { ...payload, code: couponForm.code.trim().toUpperCase() });
+          toast.success("Cupón creado");
+        }
       }
       setModal(null);
       await loadAll();
@@ -196,9 +260,11 @@ export function AdminBillingPage() {
 
   const tabs = [
     { id: "overview", label: "Resumen", icon: Package },
+    { id: "metrics", label: "Métricas", icon: BarChart3 },
     { id: "organizations", label: "Organizaciones", icon: Building2 },
     { id: "subscriptions", label: "Suscripciones", icon: CreditCard },
     { id: "payments", label: "Pagos", icon: Receipt },
+    { id: "coupons", label: "Cupones", icon: Tag },
     { id: "licenses", label: "Licencias", icon: KeyRound },
     { id: "services", label: "Servicios", icon: Wrench },
     { id: "plans", label: "Planes", icon: Package },
@@ -255,6 +321,71 @@ export function AdminBillingPage() {
             </div>
           )}
 
+          {activeTab === "metrics" && data.metrics && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard title="MRR" value={data.metrics.mrrFormatted} icon={<BarChart3 className="w-6 h-6" />} iconBg="bg-unal-primary/10" />
+                <KPICard title="ARR" value={data.metrics.arrFormatted} icon={<BarChart3 className="w-6 h-6" />} iconBg="bg-unal-accent/10" />
+                <KPICard title="ARPU" value={data.metrics.arpuFormatted} icon={<CreditCard className="w-6 h-6" />} iconBg="bg-unal-secondary/10" />
+                <KPICard title="Churn (30 días)" value={`${data.metrics.churnRate}%`} icon={<Ban className="w-6 h-6" />} iconBg="bg-yellow-100" />
+                <KPICard title="Suscripciones activas" value={data.metrics.activeSubscriptions} icon={<CreditCard className="w-6 h-6" />} iconBg="bg-unal-primary/10" />
+                <KPICard title="Pruebas activas" value={data.metrics.activeTrials} icon={<PlayCircle className="w-6 h-6" />} iconBg="bg-unal-accent/10" />
+                <KPICard title="Nuevas orgs (30 d)" value={data.metrics.newOrganizations30} icon={<Building2 className="w-6 h-6" />} iconBg="bg-unal-secondary/10" />
+                <KPICard title="Recaudado (30 d)" value={data.metrics.revenueLast30Formatted} icon={<Receipt className="w-6 h-6" />} iconBg="bg-unal-accent/10" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="card p-6">
+                  <h3 className="text-lg font-semibold text-unal-secondary mb-5">
+                    Ingresos últimos 6 meses
+                  </h3>
+                  {data.metrics.revenueByMonth.length === 0 ? (
+                    <p className="text-sm text-unal-secondary-light">
+                      Aún no hay pagos confirmados.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(() => {
+                        const max = Math.max(...data.metrics.revenueByMonth.map((m) => m.total), 1);
+                        return data.metrics.revenueByMonth.map((m) => (
+                          <div key={m.month}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-unal-secondary-light">{m.month}</span>
+                              <span className="font-medium text-unal-secondary">{m.totalFormatted}</span>
+                            </div>
+                            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-unal-primary rounded-full" style={{ width: `${Math.round((m.total / max) * 100)}%` }} />
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="card p-6">
+                  <h3 className="text-lg font-semibold text-unal-secondary mb-5">
+                    Suscripciones por plan
+                  </h3>
+                  {data.metrics.subscriptionsByPlan.length === 0 ? (
+                    <p className="text-sm text-unal-secondary-light">
+                      No hay suscripciones activas.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {data.metrics.subscriptionsByPlan.map((p) => (
+                        <div key={p.planCode} className="flex items-center justify-between text-sm border border-gray-100 rounded-lg px-3 py-2">
+                          <span className="text-unal-secondary">{p.planName}</span>
+                          <span className="badge badge-info">{p.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === "organizations" && (
             <div className="space-y-4">
               <div className="flex justify-end">
@@ -281,7 +412,13 @@ export function AdminBillingPage() {
 
           {activeTab === "subscriptions" && (
             <div className="space-y-4">
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  className="btn-secondary inline-flex items-center gap-2"
+                  onClick={() => action(() => api.post("/admin/subscriptions/run-lifecycle"), "Ciclo de vida ejecutado")}
+                >
+                  <PlayCircle className="w-4 h-4" /> Ejecutar ciclo de vida
+                </button>
                 <button className="btn-primary inline-flex items-center gap-2" onClick={() => openModal("sub")}>
                   <Plus className="w-4 h-4" /> Asignar plan
                 </button>
@@ -355,6 +492,40 @@ export function AdminBillingPage() {
             </div>
           )}
 
+          {activeTab === "coupons" && (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button className="btn-primary inline-flex items-center gap-2" onClick={() => openModal("coupon")}>
+                  <Plus className="w-4 h-4" /> Nuevo cupón
+                </button>
+              </div>
+              <DataTable
+                columns={[
+                  { key: "code", label: "Código", render: (v) => <span className="font-mono text-xs">{v}</span> },
+                  { key: "discount_type", label: "Descuento", render: (v, row) => (v === "percent" ? `${Number(row.discount_value)}%` : formatCOP(row.discount_value)) },
+                  { key: "plan_code", label: "Aplica a", render: (v) => v || "Todos" },
+                  { key: "redemptions", label: "Canjes", render: (v, row) => `${v}${row.max_redemptions ? ` / ${row.max_redemptions}` : ""}` },
+                  { key: "valid_until", label: "Vence", render: (v) => (v ? formatDate(v) : "Sin límite") },
+                  { key: "is_active", label: "Estado", render: (v) => (v ? <span className="badge badge-success">Activo</span> : <span className="badge badge-gray">Inactivo</span>) },
+                ]}
+                data={data.coupons}
+                keyField="id"
+                pagination={false}
+                emptyMessage="No hay cupones"
+                renderActions={(row) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <button onClick={() => openModal("coupon", row)} className="btn-secondary text-sm">Editar</button>
+                    {row.is_active ? (
+                      <button onClick={() => action(() => api.delete(`/admin/coupons/${row.id}`), "Cupón desactivado")} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Desactivar">
+                        <Ban className="w-4 h-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              />
+            </div>
+          )}
+
           {activeTab === "licenses" && (
             <div className="space-y-4">
               <div className="flex justify-end">
@@ -419,22 +590,30 @@ export function AdminBillingPage() {
           )}
 
           {activeTab === "plans" && (
-            <DataTable
-              columns={[
-                { key: "name", label: "Plan" },
-                { key: "price_monthly", label: "Mensual", render: (v) => formatCOP(v) },
-                { key: "price_yearly", label: "Anual", render: (v) => formatCOP(v) },
-                { key: "is_active", label: "Estado", render: (v) => (v ? <span className="badge badge-success">Activo</span> : <span className="badge badge-gray">Inactivo</span>) },
-              ]}
-              data={data.plans}
-              keyField="code"
-              pagination={false}
-              renderActions={(row) => (
-                <button onClick={() => openModal("plan", row)} className="btn-secondary text-sm">
-                  Editar
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button className="btn-primary inline-flex items-center gap-2" onClick={() => openModal("plan-new")}>
+                  <Plus className="w-4 h-4" /> Nuevo plan a medida
                 </button>
-              )}
-            />
+              </div>
+              <DataTable
+                columns={[
+                  { key: "name", label: "Plan" },
+                  { key: "price_monthly", label: "Mensual", render: (v) => formatCOP(v) },
+                  { key: "price_yearly", label: "Anual", render: (v) => formatCOP(v) },
+                  { key: "trial_days", label: "Prueba", render: (v) => (v ? `${v} días` : "—") },
+                  { key: "is_active", label: "Estado", render: (v) => (v ? <span className="badge badge-success">Activo</span> : <span className="badge badge-gray">Inactivo</span>) },
+                ]}
+                data={data.plans}
+                keyField="code"
+                pagination={false}
+                renderActions={(row) => (
+                  <button onClick={() => openModal("plan", row)} className="btn-secondary text-sm">
+                    Editar
+                  </button>
+                )}
+              />
+            </div>
           )}
         </>
       )}
@@ -508,8 +687,91 @@ export function AdminBillingPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input label="Precio mensual" type="number" value={planForm.price_monthly} onChange={(e) => setPlanForm({ ...planForm, price_monthly: e.target.value })} />
           <Input label="Precio anual" type="number" value={planForm.price_yearly} onChange={(e) => setPlanForm({ ...planForm, price_yearly: e.target.value })} />
+          <Input label="Días de prueba (trial)" type="number" value={planForm.trial_days} onChange={(e) => setPlanForm({ ...planForm, trial_days: e.target.value })} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={planForm.is_active} onChange={(e) => setPlanForm({ ...planForm, is_active: e.target.checked })} className="w-4 h-4 text-unal-primary border-gray-300 rounded" />
+            <span className="text-sm text-unal-secondary">Activo</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+            <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? "Guardando..." : "Guardar"}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={modal === "plan-new"} onClose={() => setModal(null)} title="Nuevo plan a medida" size="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Código *" value={planNewForm.code} onChange={(e) => setPlanNewForm({ ...planNewForm, code: e.target.value })} required placeholder="ej: cooperativa" />
+            <Input label="Nombre *" value={planNewForm.name} onChange={(e) => setPlanNewForm({ ...planNewForm, name: e.target.value })} required />
+            <Input label="Precio mensual" type="number" value={planNewForm.price_monthly} onChange={(e) => setPlanNewForm({ ...planNewForm, price_monthly: e.target.value })} />
+            <Input label="Precio anual" type="number" value={planNewForm.price_yearly} onChange={(e) => setPlanNewForm({ ...planNewForm, price_yearly: e.target.value })} />
+            <Input label="Días de prueba" type="number" value={planNewForm.trial_days} onChange={(e) => setPlanNewForm({ ...planNewForm, trial_days: e.target.value })} />
+            <Input label="Descripción" value={planNewForm.description} onChange={(e) => setPlanNewForm({ ...planNewForm, description: e.target.value })} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-unal-secondary mb-2">Funciones incluidas</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto scrollbar-thin pr-1">
+              {data.features.map((f) => {
+                const checked = Object.prototype.hasOwnProperty.call(planNewForm.features, f.code);
+                return (
+                  <div key={f.code} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = { ...planNewForm.features };
+                        if (e.target.checked) next[f.code] = f.kind === "limit" ? 1 : null;
+                        else delete next[f.code];
+                        setPlanNewForm({ ...planNewForm, features: next });
+                      }}
+                      className="w-4 h-4 accent-unal-primary"
+                    />
+                    <span className="text-sm text-unal-secondary flex-1">{f.name}</span>
+                    {checked && f.kind === "limit" && (
+                      <input
+                        type="number"
+                        min="1"
+                        value={planNewForm.features[f.code] ?? ""}
+                        onChange={(e) =>
+                          setPlanNewForm({
+                            ...planNewForm,
+                            features: {
+                              ...planNewForm.features,
+                              [f.code]: e.target.value === "" ? null : Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="input-field w-20 py-1 text-sm"
+                        placeholder="∞"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" className="btn-secondary" onClick={() => setModal(null)}>Cancelar</button>
+            <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? "Creando..." : "Crear plan"}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={modal === "coupon"} onClose={() => setModal(null)} title={couponForm.id ? `Editar cupón ${couponForm.code}` : "Nuevo cupón"} size="lg">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Código *" value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} required disabled={!!couponForm.id} />
+            <Input label="Descripción" value={couponForm.description} onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })} />
+            <Select label="Tipo de descuento" value={couponForm.discount_type} onChange={(e) => setCouponForm({ ...couponForm, discount_type: e.target.value })} options={[{ value: "percent", label: "Porcentaje (%)" }, { value: "fixed", label: "Valor fijo (COP)" }]} />
+            <Input label="Valor" type="number" value={couponForm.discount_value} onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })} />
+            <Select label="Aplica al plan" value={couponForm.plan_code} onChange={(e) => setCouponForm({ ...couponForm, plan_code: e.target.value })} options={[{ value: "", label: "Todos los planes" }, ...planOptions]} />
+            <Input label="Máx. canjes (vacío = ilimitado)" type="number" value={couponForm.max_redemptions} onChange={(e) => setCouponForm({ ...couponForm, max_redemptions: e.target.value })} />
+            <Input label="Válido desde" type="date" value={couponForm.valid_from} onChange={(e) => setCouponForm({ ...couponForm, valid_from: e.target.value })} />
+            <Input label="Válido hasta" type="date" value={couponForm.valid_until} onChange={(e) => setCouponForm({ ...couponForm, valid_until: e.target.value })} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={couponForm.is_active} onChange={(e) => setCouponForm({ ...couponForm, is_active: e.target.checked })} className="w-4 h-4 accent-unal-primary" />
             <span className="text-sm text-unal-secondary">Activo</span>
           </label>
           <div className="flex justify-end gap-3 pt-2">

@@ -18,6 +18,7 @@ import pool from "../config/database.js";
 import { formatCOP } from "../utils/helpers.js";
 import { invalidatePlanCache } from "../middleware/plan.js";
 import { generateLicenseKey, verifyLicenseKey } from "../utils/license.js";
+import { runLifecycle } from "../services/subscriptionLifecycle.js";
 import {
   organizationSchema,
   organizationUpdateSchema,
@@ -25,6 +26,9 @@ import {
   subscriptionUpdateSchema,
   licenseSchema,
   planUpdateSchema,
+  planCreateSchema,
+  couponSchema,
+  couponUpdateSchema,
   serviceOrderUpdateSchema,
 } from "../validators/index.js";
 
@@ -320,8 +324,9 @@ export async function confirmPayment(request, reply) {
        WHERE organization_id = ? AND status IN ('active', 'trialing')`,
       [payment.organization_id],
     );
-    const amount =
-      payment.billing_cycle === "yearly" ? plan.price_yearly : plan.price_monthly;
+    // Se respeta el monto de la solicitud: ya incluye el descuento del cupón
+    // (o cualquier ajuste negociado), no se recalcula desde el precio de lista.
+    const amount = Number(payment.amount);
     const [subResult] = await connection.query(
       `INSERT INTO subscriptions
          (organization_id, plan_id, status, billing_cycle, amount,
@@ -345,6 +350,32 @@ export async function confirmPayment(request, reply) {
        WHERE id = ?`,
       [subResult.insertId, amount, payment.id],
     );
+
+    // Si la solicitud usó un cupón, se registra el uso y se incrementa el
+    // contador (dentro de la misma transacción para no descuadrar límites).
+    if (payment.coupon_code) {
+      const [[coupon]] = await connection.query(
+        "SELECT id FROM coupons WHERE code = ? LIMIT 1",
+        [payment.coupon_code],
+      );
+      if (coupon) {
+        await connection.query(
+          `INSERT INTO coupon_redemptions
+             (coupon_id, organization_id, payment_id, amount_discounted)
+           VALUES (?, ?, ?, ?)`,
+          [
+            coupon.id,
+            payment.organization_id,
+            payment.id,
+            Number(payment.discount_amount) || 0,
+          ],
+        );
+        await connection.query(
+          "UPDATE coupons SET redeemed_count = redeemed_count + 1 WHERE id = ?",
+          [coupon.id],
+        );
+      }
+    }
 
     await connection.commit();
     invalidatePlanCache();
@@ -523,4 +554,258 @@ export async function updatePlan(request, reply) {
   // El catálogo en memoria debe reflejar el cambio de inmediato.
   invalidatePlanCache();
   return reply.send({ message: "Plan actualizado" });
+}
+
+// Catálogo completo de features disponibles (para crear planes a medida).
+export async function getFeatureCatalog(request, reply) {
+  const [rows] = await pool.query(
+    `SELECT code, name, category, kind, description, sort_order
+     FROM feature_catalog ORDER BY sort_order ASC`,
+  );
+  return reply.send({ features: rows });
+}
+
+// Crea un PLAN A MEDIDA (código, precios, trial y features seleccionadas).
+export async function createAdminPlan(request, reply) {
+  const { error, value } = planCreateSchema.validate(request.body);
+  if (error) return reply.code(400).send({ error: error.details[0].message });
+
+  const [existing] = await pool.query("SELECT id FROM plans WHERE code = ?", [
+    value.code,
+  ]);
+  if (existing.length > 0) {
+    return reply.code(409).send({ error: "Ya existe un plan con ese código" });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `INSERT INTO plans
+         (code, name, description, price_monthly, price_yearly, trial_days, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        value.code,
+        value.name,
+        value.description || null,
+        value.price_monthly,
+        value.price_yearly,
+        value.trial_days,
+        value.sort_order,
+        value.is_active,
+      ],
+    );
+
+    const features = value.features || {};
+    for (const [featureCode, limitValue] of Object.entries(features)) {
+      await connection.query(
+        `INSERT INTO plan_features (plan_id, feature_code, limit_value)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE limit_value = VALUES(limit_value)`,
+        [result.insertId, featureCode, limitValue],
+      );
+    }
+
+    await connection.commit();
+    invalidatePlanCache();
+    return reply.code(201).send({ plan: { id: result.insertId, code: value.code } });
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CUPONES DE DESCUENTO
+// ---------------------------------------------------------------------------
+export async function getCoupons(request, reply) {
+  const [rows] = await pool.query(
+    `SELECT c.*,
+       (SELECT COUNT(*) FROM coupon_redemptions r WHERE r.coupon_id = c.id) AS redemptions
+     FROM coupons c
+     ORDER BY c.created_at DESC`,
+  );
+  return reply.send({ coupons: rows });
+}
+
+export async function createCoupon(request, reply) {
+  const { error, value } = couponSchema.validate(request.body);
+  if (error) return reply.code(400).send({ error: error.details[0].message });
+
+  if (value.discount_type === "percent" && value.discount_value > 100) {
+    return reply
+      .code(400)
+      .send({ error: "Un descuento porcentual no puede superar 100" });
+  }
+
+  const [existing] = await pool.query("SELECT id FROM coupons WHERE code = ?", [
+    value.code,
+  ]);
+  if (existing.length > 0) {
+    return reply.code(409).send({ error: "Ya existe un cupón con ese código" });
+  }
+
+  const [result] = await pool.query(
+    `INSERT INTO coupons
+       (code, description, discount_type, discount_value, plan_code,
+        max_redemptions, valid_from, valid_until, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      value.code,
+      value.description || null,
+      value.discount_type,
+      value.discount_value,
+      value.plan_code || null,
+      value.max_redemptions ?? null,
+      value.valid_from ? toDate(value.valid_from) : null,
+      value.valid_until ? toDate(value.valid_until) : null,
+      value.is_active,
+    ],
+  );
+  const [rows] = await pool.query("SELECT * FROM coupons WHERE id = ?", [
+    result.insertId,
+  ]);
+  return reply.code(201).send({ coupon: rows[0] });
+}
+
+export async function updateCoupon(request, reply) {
+  const { error, value } = couponUpdateSchema.validate(request.body);
+  if (error) return reply.code(400).send({ error: error.details[0].message });
+
+  const fields = [];
+  const params = [];
+  for (const [key, val] of Object.entries(value)) {
+    if (val === undefined) continue;
+    if (key === "valid_from" || key === "valid_until") {
+      fields.push(`${key} = ?`);
+      params.push(val ? toDate(val) : null);
+    } else {
+      fields.push(`${key} = ?`);
+      params.push(val);
+    }
+  }
+  params.push(request.params.id);
+
+  const [result] = await pool.query(
+    `UPDATE coupons SET ${fields.join(", ")} WHERE id = ?`,
+    params,
+  );
+  if (result.affectedRows === 0) {
+    return reply.code(404).send({ error: "Cupón no encontrado" });
+  }
+  return reply.send({ message: "Cupón actualizado" });
+}
+
+// Baja lógica del cupón (se conserva el historial de canjes).
+export async function deleteCoupon(request, reply) {
+  const [result] = await pool.query(
+    "UPDATE coupons SET is_active = FALSE WHERE id = ?",
+    [request.params.id],
+  );
+  if (result.affectedRows === 0) {
+    return reply.code(404).send({ error: "Cupón no encontrado" });
+  }
+  return reply.send({ message: "Cupón desactivado" });
+}
+
+// ---------------------------------------------------------------------------
+// MÉTRICAS SaaS
+// ---------------------------------------------------------------------------
+export async function getAdminMetrics(request, reply) {
+  // Suscripciones vigentes: base del MRR/ARR.
+  const [activeSubs] = await pool.query(
+    `SELECT s.organization_id, s.amount, s.billing_cycle, p.code AS plan_code, p.name AS plan_name
+     FROM subscriptions s
+     JOIN plans p ON p.id = s.plan_id
+     WHERE s.status IN ('active', 'trialing') AND s.current_period_end >= CURDATE()`,
+  );
+
+  // MRR: normaliza el importe anual a mensual.
+  let mrr = 0;
+  const planCounts = new Map();
+  const payingOrgs = new Set();
+  for (const s of activeSubs) {
+    const monthly = s.billing_cycle === "yearly" ? Number(s.amount) / 12 : Number(s.amount);
+    mrr += monthly;
+    payingOrgs.add(s.organization_id);
+    const key = s.plan_code;
+    if (!planCounts.has(key)) {
+      planCounts.set(key, { planCode: s.plan_code, planName: s.plan_name, count: 0 });
+    }
+    planCounts.get(key).count += 1;
+  }
+  const arr = mrr * 12;
+  const arpu = payingOrgs.size > 0 ? mrr / payingOrgs.size : 0;
+
+  const [[trials]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM subscriptions
+     WHERE status = 'trialing' AND current_period_end >= CURDATE()`,
+  );
+
+  // Cancelaciones + vencimientos de los últimos 30 días.
+  const [[churned]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM subscriptions
+     WHERE status IN ('canceled', 'expired')
+       AND (canceled_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            OR current_period_end >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))`,
+  );
+  const churnBase = activeSubs.length + Number(churned.total);
+  const churnRate = churnBase > 0 ? (Number(churned.total) / churnBase) * 100 : 0;
+
+  const [[newOrgs]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM organizations
+     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+  );
+
+  const [[collected]] = await pool.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'pagado'`,
+  );
+  const [[collected30]] = await pool.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total FROM payments
+     WHERE status = 'pagado' AND paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+  );
+
+  const [byMonth] = await pool.query(
+    `SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month, SUM(amount) AS total
+     FROM payments
+     WHERE status = 'pagado' AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+     GROUP BY month ORDER BY month ASC`,
+  );
+
+  return reply.send({
+    mrr: Math.round(mrr),
+    mrrFormatted: formatCOP(mrr),
+    arr: Math.round(arr),
+    arrFormatted: formatCOP(arr),
+    arpu: Math.round(arpu),
+    arpuFormatted: formatCOP(arpu),
+    activeSubscriptions: activeSubs.length,
+    payingOrganizations: payingOrgs.size,
+    activeTrials: Number(trials.total),
+    churnedLast30: Number(churned.total),
+    churnRate: Number(churnRate.toFixed(1)),
+    newOrganizations30: Number(newOrgs.total),
+    revenueCollected: Number(collected.total),
+    revenueCollectedFormatted: formatCOP(collected.total),
+    revenueLast30: Number(collected30.total),
+    revenueLast30Formatted: formatCOP(collected30.total),
+    subscriptionsByPlan: [...planCounts.values()],
+    revenueByMonth: byMonth.map((m) => ({
+      month: m.month,
+      total: Number(m.total),
+      totalFormatted: formatCOP(m.total),
+    })),
+  });
+}
+
+// Ejecuta manualmente el ciclo de vida de las suscripciones (expirar/cancelar).
+export async function runLifecycleNow(request, reply) {
+  const result = await runLifecycle();
+  return reply.send({
+    message: "Ciclo de vida ejecutado",
+    ...result,
+  });
 }

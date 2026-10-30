@@ -60,6 +60,7 @@ export const billingMigrations = [
     description VARCHAR(255) NULL,
     price_monthly DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     price_yearly DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    trial_days INT NOT NULL DEFAULT 0,
     sort_order INT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -173,6 +174,40 @@ export const billingMigrations = [
     INDEX idx_service_orders_org (organization_id),
     INDEX idx_service_orders_status (status)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+  // Cupones de descuento (porcentaje o valor fijo). `plan_code` nulo = aplica a
+  // cualquier plan. `max_redemptions` nulo = sin límite de usos.
+  `CREATE TABLE IF NOT EXISTS coupons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    description VARCHAR(255) NULL,
+    discount_type ENUM('percent', 'fixed') NOT NULL DEFAULT 'percent',
+    discount_value DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    plan_code VARCHAR(40) NULL,
+    max_redemptions INT NULL,
+    redeemed_count INT NOT NULL DEFAULT 0,
+    valid_from DATE NULL,
+    valid_until DATE NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_coupons_active (is_active)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+  // Registro de cada uso de un cupón (auditoría y control de límites).
+  `CREATE TABLE IF NOT EXISTS coupon_redemptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    coupon_id INT NOT NULL,
+    organization_id INT NOT NULL,
+    payment_id INT NULL,
+    amount_discounted DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
+    INDEX idx_coupon_redemptions_coupon (coupon_id),
+    INDEX idx_coupon_redemptions_org (organization_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 ];
 
 // ---------------------------------------------------------------------------
@@ -238,6 +273,7 @@ export const plansCatalog = [
     description: "Pequeños productores",
     price_monthly: 200000,
     price_yearly: 2000000,
+    trial_days: 14,
     sort_order: 1,
     features: BASIC_FEATURES,
   },
@@ -247,6 +283,7 @@ export const plansCatalog = [
     description: "Granjas medianas y cooperativas",
     price_monthly: 550000,
     price_yearly: 5500000,
+    trial_days: 14,
     sort_order: 2,
     features: PROFESSIONAL_FEATURES,
   },
@@ -256,6 +293,7 @@ export const plansCatalog = [
     description: "Universidades, gobiernos y multi-sede",
     price_monthly: 1500000,
     price_yearly: 15000000,
+    trial_days: 30,
     sort_order: 3,
     features: INSTITUTIONAL_FEATURES,
   },
@@ -295,6 +333,45 @@ export async function ensureUsersOrganizationColumn(connection) {
 }
 
 // ---------------------------------------------------------------------------
+// 5b) RUTINA IDEMPOTENTE: columnas de ciclo de vida, trials y cupones.
+//     Se ejecuta tras crear las tablas para actualizar bases YA existentes.
+//     Devuelve cuántas columnas se agregaron (informativo).
+// ---------------------------------------------------------------------------
+async function columnExists(connection, table, column) {
+  const [rows] = await connection.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column],
+  );
+  return rows.length > 0;
+}
+
+async function addColumnIfMissing(connection, table, column, definition) {
+  if (await columnExists(connection, table, column)) return false;
+  await connection.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  return true;
+}
+
+export async function ensureLifecycleColumns(connection) {
+  let added = 0;
+  const specs = [
+    // Cancelación programada al final del periodo (self-service).
+    ["subscriptions", "cancel_at_period_end", "BOOLEAN NOT NULL DEFAULT FALSE"],
+    ["subscriptions", "canceled_at", "TIMESTAMP NULL"],
+    ["subscriptions", "trial_ends_at", "DATE NULL"],
+    // Descuentos por cupón aplicados a un pago/solicitud.
+    ["payments", "coupon_code", "VARCHAR(40) NULL"],
+    ["payments", "discount_amount", "DECIMAL(15,2) NOT NULL DEFAULT 0.00"],
+    // Días de prueba gratuita por plan.
+    ["plans", "trial_days", "INT NOT NULL DEFAULT 0"],
+  ];
+  for (const [table, column, def] of specs) {
+    if (await addColumnIfMissing(connection, table, column, def)) added += 1;
+  }
+  return added;
+}
+
+// ---------------------------------------------------------------------------
 // 6) SEED del catálogo (features, planes, plan_features y servicios).
 //    Totalmente idempotente: se puede correr muchas veces sin duplicar.
 // ---------------------------------------------------------------------------
@@ -312,13 +389,14 @@ export async function seedBillingCatalog(connection) {
 
   for (const p of plansCatalog) {
     await connection.query(
-      `INSERT INTO plans (code, name, description, price_monthly, price_yearly, sort_order, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, TRUE)
+      `INSERT INTO plans (code, name, description, price_monthly, price_yearly, trial_days, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name), description = VALUES(description),
          price_monthly = VALUES(price_monthly), price_yearly = VALUES(price_yearly),
+         trial_days = VALUES(trial_days),
          sort_order = VALUES(sort_order)`,
-      [p.code, p.name, p.description, p.price_monthly, p.price_yearly, p.sort_order],
+      [p.code, p.name, p.description, p.price_monthly, p.price_yearly, p.trial_days || 0, p.sort_order],
     );
 
     const [[planRow]] = await connection.query(

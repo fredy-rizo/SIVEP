@@ -129,7 +129,7 @@ export async function updateUser(request, reply) {
   const { id } = request.params;
 
   const [existing] = await pool.query(
-    "SELECT id, role FROM users WHERE id = ?",
+    "SELECT id, role, organization_id, is_active FROM users WHERE id = ?",
     [id],
   );
   if (existing.length === 0) {
@@ -141,6 +141,31 @@ export async function updateUser(request, reply) {
     request.user.role !== "super_admin"
   ) {
     return reply.code(403).send({ error: "No puede modificar un super_admin" });
+  }
+
+  // Reactivar un usuario consume una licencia del plan: se vuelve a comprobar el
+  // límite (desactivarlo lo libera; activarlo lo ocupa).
+  if (value.is_active === true && existing[0].is_active === false) {
+    const resolved = await resolveUserPlan(request.user);
+    const targetOrg = existing[0].organization_id;
+    if (
+      targetOrg &&
+      !resolved.isSuperAdmin &&
+      resolved.limits.has("limit.users")
+    ) {
+      const userLimit = resolved.limits.get("limit.users");
+      if (userLimit !== null) {
+        const currentUsers = await countActiveUsers(targetOrg);
+        if (currentUsers >= userLimit) {
+          return reply.code(402).send({
+            error: `Tu plan permite hasta ${userLimit} usuarios activos. Mejora tu plan para reactivar este usuario.`,
+            code: "USER_LIMIT_REACHED",
+            limit: userLimit,
+            current: currentUsers,
+          });
+        }
+      }
+    }
   }
 
   if (value.email) {

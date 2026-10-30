@@ -1,5 +1,22 @@
 import { useEffect, useState } from "react";
-import { Check, Crown, Clock, Users as UsersIcon, AlertTriangle, Sparkles, Wrench } from "lucide-react";
+import {
+  Crown,
+  Clock,
+  Users as UsersIcon,
+  AlertTriangle,
+  Sparkles,
+  Wrench,
+  Building2,
+  CalendarDays,
+  CalendarClock,
+  CreditCard,
+  Wallet,
+  CheckCircle2,
+  Tag,
+  Power,
+  RotateCcw,
+  Receipt,
+} from "lucide-react";
 import api from "../utils/api";
 import { formatCOP, formatDate } from "../utils/formatters";
 import { usePlan } from "../context/PlanContext";
@@ -28,6 +45,9 @@ export function MyPlanPage() {
   const [submitting, setSubmitting] = useState(null);
   const [requestingService, setRequestingService] = useState(null);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [coupon, setCoupon] = useState("");
+  const [invoices, setInvoices] = useState([]);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -41,6 +61,18 @@ export function MyPlanPage() {
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const loadInvoices = async () => {
+      try {
+        const res = await api.get("/billing/invoices");
+        setInvoices(res.data.invoices || []);
+      } catch (error) {
+        // Silencioso: el historial es informativo.
+      }
+    };
+    loadInvoices();
   }, []);
 
   const currentCode = plan?.plan?.code || null;
@@ -67,13 +99,52 @@ export function MyPlanPage() {
   const requestPlan = async (planCode) => {
     setSubmitting(planCode);
     try {
-      await api.post("/billing/request", { plan_code: planCode, billing_cycle: cycle });
-      toast.success("Solicitud enviada", "Un asesor te contactará para completar la activación");
+      const { data } = await api.post("/billing/request", {
+        plan_code: planCode,
+        billing_cycle: cycle,
+        coupon_code: coupon.trim() || undefined,
+      });
+      const disc = data?.request?.discount || 0;
+      toast.success(
+        "Solicitud enviada",
+        disc > 0
+          ? `Cupón aplicado: ahorras ${data.request.discountFormatted}. Un asesor te contactará.`
+          : "Un asesor te contactará para completar la activación"
+      );
       await refresh();
+      const inv = await api.get("/billing/invoices");
+      setInvoices(inv.data.invoices || []);
     } catch (error) {
       toast.error("Error", error.response?.data?.error || "No se pudo enviar la solicitud");
     } finally {
       setSubmitting(null);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    if (!window.confirm("¿Cancelar tu suscripción al final del periodo actual?")) return;
+    setLifecycleBusy(true);
+    try {
+      await api.post("/billing/subscription/cancel");
+      toast.success("Cancelación programada", "Tu suscripción seguirá activa hasta el vencimiento.");
+      await refresh();
+    } catch (error) {
+      toast.error("Error", error.response?.data?.error || "No se pudo cancelar");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  };
+
+  const resumeSubscription = async () => {
+    setLifecycleBusy(true);
+    try {
+      await api.post("/billing/subscription/resume");
+      toast.success("Suscripción reactivada", "Tu cancelación fue deshecha.");
+      await refresh();
+    } catch (error) {
+      toast.error("Error", error.response?.data?.error || "No se pudo reactivar");
+    } finally {
+      setLifecycleBusy(false);
     }
   };
 
@@ -100,6 +171,17 @@ export function MyPlanPage() {
       expired: { label: "Vencida", cls: "badge-danger" },
     };
     return map[status] || { label: status || "Sin suscripción", cls: "badge-gray" };
+  };
+
+  // Etiqueta legible del estado de una factura/solicitud de pago.
+  const invoiceBadge = (status) => {
+    const map = {
+      pagado: { label: "Pagado", cls: "badge-success" },
+      pendiente: { label: "Pendiente", cls: "badge-warning" },
+      rechazado: { label: "Rechazado", cls: "badge-danger" },
+      cancelado: { label: "Cancelado", cls: "badge-gray" },
+    };
+    return map[status] || { label: status || "—", cls: "badge-gray" };
   };
 
   if (isSuperAdmin) {
@@ -143,6 +225,27 @@ export function MyPlanPage() {
         </div>
       )}
 
+      {subscription?.cancelAtPeriodEnd && (
+        <div className="card p-4 border-l-4 border-red-400 bg-red-50 flex flex-col sm:flex-row sm:items-center gap-3">
+          <Power className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <div className="text-sm flex-1">
+            <p className="font-medium text-unal-secondary">Cancelación programada</p>
+            <p className="text-unal-secondary-light">
+              Tu suscripción se cancelará el{" "}
+              <strong>{formatDate(subscription.currentPeriodEnd)}</strong>. Puedes
+              reactivarla antes de esa fecha.
+            </p>
+          </div>
+          <button
+            onClick={resumeSubscription}
+            disabled={lifecycleBusy}
+            className="btn-primary text-sm inline-flex items-center justify-center gap-1.5 disabled:opacity-50 flex-shrink-0"
+          >
+            <RotateCcw className="w-4 h-4" /> Reactivar
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="Plan actual"
@@ -172,57 +275,146 @@ export function MyPlanPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-6">
-          <h3 className="text-lg font-semibold text-unal-secondary mb-4">
-            Organización y suscripción
-          </h3>
-          <dl className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-unal-secondary-light">Organización</dt>
-              <dd className="font-medium text-unal-secondary">
-                {organization?.name || "Sin asignar"}
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="p-2.5 rounded-lg bg-unal-primary/10 text-unal-primary flex-shrink-0">
+                <Building2 className="w-5 h-5" />
+              </span>
+              <h3 className="text-lg font-semibold text-unal-secondary truncate">
+                Organización y suscripción
+              </h3>
+            </div>
+            <span className={`badge ${statusBadge(subscription?.status).cls} flex-shrink-0`}>
+              {statusBadge(subscription?.status).label}
+            </span>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-4 mb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-unal-secondary-light">
+                  Organización
+                </p>
+                <p className="font-semibold text-unal-secondary truncate mt-0.5">
+                  {organization?.name || "Sin asignar"}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-unal-secondary-light">
+                  Plan
+                </p>
+                <p className="font-semibold text-unal-primary mt-0.5">
+                  {plan?.plan?.name || "Sin plan"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <dl className="divide-y divide-gray-100">
+            <div className="flex items-center justify-between py-3">
+              <dt className="flex items-center gap-2 text-sm text-unal-secondary-light">
+                <CreditCard className="w-4 h-4" /> Facturación
+              </dt>
+              <dd className="text-sm font-medium text-unal-secondary">
+                {subscription ? (subscription.billingCycle === "yearly" ? "Anual" : "Mensual") : "—"}
               </dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-unal-secondary-light">Estado</dt>
-              <dd>
-                <span className={`badge ${statusBadge(subscription?.status).cls}`}>
-                  {statusBadge(subscription?.status).label}
-                </span>
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-unal-secondary-light">Valor del periodo</dt>
-              <dd className="font-medium text-unal-secondary">
+            <div className="flex items-center justify-between py-3">
+              <dt className="flex items-center gap-2 text-sm text-unal-secondary-light">
+                <Wallet className="w-4 h-4" /> Valor del periodo
+              </dt>
+              <dd className="text-sm font-medium text-unal-secondary">
                 {subscription?.amountFormatted || "—"}
               </dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-unal-secondary-light">Vigencia</dt>
-              <dd className="font-medium text-unal-secondary">
+            <div className="flex items-center justify-between py-3">
+              <dt className="flex items-center gap-2 text-sm text-unal-secondary-light">
+                <CalendarDays className="w-4 h-4" /> Vigencia
+              </dt>
+              <dd className="text-sm font-medium text-unal-secondary">
                 {subscription
                   ? `${formatDate(subscription.currentPeriodStart)} – ${formatDate(subscription.currentPeriodEnd)}`
                   : "—"}
               </dd>
             </div>
+            <div className="flex items-center justify-between py-3">
+              <dt className="flex items-center gap-2 text-sm text-unal-secondary-light">
+                <CalendarClock className="w-4 h-4" /> Próximo vencimiento
+              </dt>
+              <dd className="text-sm font-medium text-unal-secondary">
+                {subscription ? formatDate(subscription.currentPeriodEnd) : "—"}
+              </dd>
+            </div>
           </dl>
+
+          {limits.users ? (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-unal-secondary-light">Usuarios activos</span>
+                <span className="font-medium text-unal-secondary">
+                  {usage.users ?? 0} / {limits.users}
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-unal-accent rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, ((usage.users ?? 0) / limits.users) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {subscription && !subscription.cancelAtPeriodEnd && (
+            <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={cancelSubscription}
+                disabled={lifecycleBusy}
+                className="btn-outline border-red-300 text-red-600 hover:bg-red-500 hover:text-white hover:border-red-500 text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Power className="w-4 h-4" /> Cancelar suscripción
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="card p-6">
-          <h3 className="text-lg font-semibold text-unal-secondary mb-4">
-            Funciones incluidas
-          </h3>
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 rounded-lg bg-unal-accent/10 text-unal-accent flex-shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </span>
+              <h3 className="text-lg font-semibold text-unal-secondary">
+                Funciones incluidas
+              </h3>
+            </div>
+            {features.length > 0 && (
+              <span className="badge badge-gray flex-shrink-0">{features.length}</span>
+            )}
+          </div>
+
           {features.length === 0 ? (
-            <p className="text-sm text-unal-secondary-light">
-              No hay una suscripción activa. Solicita un plan para activar las funciones.
-            </p>
+            <div className="text-center py-10">
+              <Sparkles className="w-9 h-9 mx-auto text-gray-300 mb-2" />
+              <p className="text-sm text-unal-secondary-light">
+                No hay una suscripción activa. Solicita un plan para activar las funciones.
+              </p>
+            </div>
           ) : (
-            <ul className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {features.map((code) => (
-                <li key={code} className="flex items-center gap-2 text-sm text-unal-secondary">
-                  <Check className="w-4 h-4 text-unal-accent" /> {featureNameByCode[code] || code}
-                </li>
+                <div
+                  key={code}
+                  className="flex items-start gap-2.5 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-unal-accent flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-unal-secondary">
+                    {featureNameByCode[code] || code}
+                  </span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>
@@ -246,6 +438,18 @@ export function MyPlanPage() {
               Anual
             </button>
           </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+          <label className="text-sm text-unal-secondary-light flex items-center gap-2">
+            <Tag className="w-4 h-4" /> ¿Tienes un cupón?
+          </label>
+          <input
+            value={coupon}
+            onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+            placeholder="CÓDIGO"
+            className="input-field sm:max-w-[220px] uppercase"
+          />
         </div>
 
         {loadingCatalog ? (
@@ -372,6 +576,71 @@ export function MyPlanPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <span className="p-2.5 rounded-lg bg-unal-secondary/10 text-unal-secondary flex-shrink-0">
+            <Receipt className="w-5 h-5" />
+          </span>
+          <h3 className="text-lg font-semibold text-unal-secondary">
+            Historial de facturas
+          </h3>
+        </div>
+
+        {invoices.length === 0 ? (
+          <p className="text-sm text-unal-secondary-light">
+            Aún no tienes facturas ni solicitudes registradas.
+          </p>
+        ) : (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Referencia</th>
+                  <th>Plan</th>
+                  <th>Ciclo</th>
+                  <th>Valor</th>
+                  <th>Estado</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => {
+                  const badge = invoiceBadge(inv.status);
+                  const planName =
+                    catalog.plans.find((p) => p.code === inv.planCode)?.name ||
+                    inv.planCode;
+                  return (
+                    <tr key={inv.id}>
+                      <td className="font-mono text-xs text-unal-secondary-light">
+                        {inv.reference}
+                      </td>
+                      <td className="text-unal-secondary">{planName}</td>
+                      <td className="text-unal-secondary-light">
+                        {inv.billingCycle === "yearly" ? "Anual" : "Mensual"}
+                      </td>
+                      <td className="text-unal-secondary">
+                        {inv.amountFormatted}
+                        {inv.discount > 0 && (
+                          <span className="text-xs text-unal-accent ml-2">
+                            −{inv.discountFormatted} ({inv.couponCode})
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${badge.cls}`}>{badge.label}</span>
+                      </td>
+                      <td className="text-unal-secondary-light">
+                        {formatDate(inv.createdAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

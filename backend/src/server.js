@@ -22,6 +22,7 @@ import publicRoutes from "./routes/publicRoutes.js";
 import cookiesRoutes from "./routes/cookiesRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import adminBillingRoutes from "./routes/adminBillingRoutes.js";
+import { startSubscriptionLifecycle } from "./services/subscriptionLifecycle.js";
 
 dotenv.config();
 
@@ -170,6 +171,10 @@ async function start() {
 
     const port = process.env.PORT || 3000;
     await fastify.listen({ port, host: "0.0.0.0" });
+
+    // Ciclo de vida de suscripciones: expira/cancela las vencidas. Se ejecuta
+    // una vez al arrancar y luego periódicamente (no bloquea el servidor).
+    startSubscriptionLifecycle();
 
     console.log(`Servidor corriendo en http://localhost:${port}`);
   } catch (err) {

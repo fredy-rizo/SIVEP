@@ -155,10 +155,12 @@ export const cookieConsentSchema = Joi.object({
   });
 
 // Solicitud de cambio/ascenso de plan (pago manual). `notes` es opcional para
-// que el cliente deje datos de contacto o requerimientos.
+// que el cliente deje datos de contacto o requerimientos. `coupon_code` aplica
+// un descuento si el cupón es válido.
 export const billingRequestSchema = Joi.object({
   plan_code: Joi.string().max(40).required(),
   billing_cycle: Joi.string().valid("monthly", "yearly").default("monthly"),
+  coupon_code: Joi.string().max(40).allow("", null),
   notes: Joi.string().max(1000).allow("", null),
 });
 
@@ -212,8 +214,60 @@ export const licenseSchema = Joi.object({
 });
 
 export const planUpdateSchema = Joi.object({
+  name: Joi.string().min(2).max(120),
+  description: Joi.string().max(255).allow("", null),
   price_monthly: Joi.number().min(0),
   price_yearly: Joi.number().min(0),
+  trial_days: Joi.number().integer().min(0).max(365),
+  is_active: Joi.boolean(),
+}).min(1);
+
+// Creación de un plan a medida (código único + precios + features).
+export const planCreateSchema = Joi.object({
+  code: Joi.string()
+    .pattern(/^[a-z0-9][a-z0-9_-]{1,39}$/)
+    .required()
+    .messages({
+      "string.pattern.base":
+        "El código solo admite minúsculas, números, guion y guion bajo (2-40 caracteres)",
+    }),
+  name: Joi.string().min(2).max(120).required(),
+  description: Joi.string().max(255).allow("", null),
+  price_monthly: Joi.number().min(0).default(0),
+  price_yearly: Joi.number().min(0).default(0),
+  trial_days: Joi.number().integer().min(0).max(365).default(0),
+  sort_order: Joi.number().integer().default(100),
+  is_active: Joi.boolean().default(true),
+  // Features incluidas: mapa code → límite (null = ilimitado/booleana).
+  features: Joi.object().pattern(Joi.string().max(60), Joi.number().allow(null)),
+});
+
+// Cupones de descuento (solo super_admin).
+export const couponSchema = Joi.object({
+  code: Joi.string()
+    .pattern(/^[A-Z0-9][A-Z0-9_-]{1,39}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "El código solo admite mayúsculas, números, guion y guion bajo",
+    }),
+  description: Joi.string().max(255).allow("", null),
+  discount_type: Joi.string().valid("percent", "fixed").default("percent"),
+  discount_value: Joi.number().min(0).required(),
+  plan_code: Joi.string().max(40).allow("", null),
+  max_redemptions: Joi.number().integer().min(1).allow(null),
+  valid_from: Joi.date().iso().allow(null),
+  valid_until: Joi.date().iso().allow(null),
+  is_active: Joi.boolean().default(true),
+});
+
+export const couponUpdateSchema = Joi.object({
+  description: Joi.string().max(255).allow("", null),
+  discount_type: Joi.string().valid("percent", "fixed"),
+  discount_value: Joi.number().min(0),
+  plan_code: Joi.string().max(40).allow("", null),
+  max_redemptions: Joi.number().integer().min(1).allow(null),
+  valid_from: Joi.date().iso().allow(null),
+  valid_until: Joi.date().iso().allow(null),
   is_active: Joi.boolean(),
 }).min(1);
 

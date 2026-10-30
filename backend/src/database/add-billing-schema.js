@@ -16,6 +16,7 @@ import dotenv from "dotenv";
 import {
   billingMigrations,
   ensureUsersOrganizationColumn,
+  ensureLifecycleColumns,
   seedBillingCatalog,
   ensureDefaultOrganization,
 } from "./billingSchema.js";
@@ -43,11 +44,20 @@ async function runBillingMigration() {
         : "La columna users.organization_id ya existía",
     );
 
-    // 3) Catálogo comercial.
+    // 3) Columnas de ciclo de vida, trials y cupones (bases existentes).
+    //    Se hace ANTES del seed: el catálogo de planes ya usa trial_days.
+    const lifecycleCols = await ensureLifecycleColumns(connection);
+    console.log(
+      lifecycleCols
+        ? `Columnas de ciclo de vida agregadas: ${lifecycleCols}`
+        : "Columnas de ciclo de vida ya existían",
+    );
+
+    // 4) Catálogo comercial.
     await seedBillingCatalog(connection);
     console.log("Catálogo de features, planes y servicios sembrado");
 
-    // 4) Organización por defecto con suscripción activa.
+    // 5) Organización por defecto con suscripción activa.
     const organizationId = await ensureDefaultOrganization(connection);
     console.log(`Organización por defecto lista (id ${organizationId})`);
 

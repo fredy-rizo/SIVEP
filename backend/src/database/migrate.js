@@ -7,6 +7,7 @@ import {
   billingMigrations,
   seedBillingCatalog,
   ensureUsersOrganizationColumn,
+  ensureLifecycleColumns,
 } from "./billingSchema.js";
 // Aislamiento multi-tenant de las tablas de negocio.
 import { ensureOrganizationColumns } from "./multitenantSchema.js";
@@ -140,11 +141,12 @@ async function runMigrations() {
       await connection.query(migration);
     }
 
-    // Pasos que no se pueden expresar con CREATE TABLE IF NOT EXISTS: sembrar el
-    // catálogo comercial, agregar users.organization_id y aislar por
-    // organización las tablas de negocio (multi-tenant).
-    await seedBillingCatalog(connection);
+    // Pasos que no se pueden expresar con CREATE TABLE IF NOT EXISTS: agregar
+    // columnas de ciclo de vida/planes, sembrar el catálogo comercial, agregar
+    // users.organization_id y aislar por organización las tablas de negocio.
     await ensureUsersOrganizationColumn(connection);
+    await ensureLifecycleColumns(connection);
+    await seedBillingCatalog(connection);
     await ensureOrganizationColumns(connection);
 
     console.log("Migraciones completadas exitosamente");

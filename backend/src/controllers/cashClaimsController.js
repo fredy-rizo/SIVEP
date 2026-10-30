@@ -28,6 +28,9 @@ import { resolveDefaultOrganizationId } from "../middleware/plan.js";
 //   - Un administrador revisa el recibo y aprueba o rechaza.
 //   - La aprobación crea la venta, descuenta stock de forma atómica y usa el
 //     mismo código de la solicitud como código de reclamo.
+//   - La venta nace con `pickup_status = 'entregado'`: el comprador ya pagó en
+//     caja y el administrador validó el recibo físico, así que no queda una
+//     entrega pendiente que nadie vaya a marcar después.
 //
 // Si al aprobar no alcanza el stock, TODA la aprobación se revierte y se
 // responde 409 con el detalle. Nunca se aprueba a medias.
@@ -512,7 +515,7 @@ export async function getCashClaimById(request, reply) {
 // Secuencia transaccional:
 //   1. bloquear la solicitud (dos administradores no pueden aprobarla a la vez),
 //   2. crear/reutilizar el cliente,
-//   3. crear la venta en efectivo ya pagada,
+//   3. crear la venta en efectivo ya pagada y ya entregada,
 //   4. insertar los ítems y descontar stock con bloqueo de fila,
 //   5. marcar la solicitud como aprobada y enlazar la venta.
 // Cualquier fallo (incluido stock insuficiente) revierte TODO.
@@ -677,6 +680,8 @@ export async function approveCashClaim(request, reply) {
     // 3. Venta. `total` usa el valor calculado del catálogo para que la factura
     // coincida exactamente con sus ítems; si el comprador declaró otro valor,
     // queda registrado en la solicitud y el administrador lo vio al aprobar.
+    // Nace 'pagado' (el pago ya ocurrió en caja) y 'entregado' (el admin validó
+    // el recibo físico, por lo que la compra queda cerrada en un solo paso).
     const subtotal = roundMoney(claim.computed_total);
     const saleNotes = [
       `Compra en efectivo validada manualmente.`,
@@ -699,7 +704,7 @@ export async function approveCashClaim(request, reply) {
               cash_receipt_code, paid_at, pickup_code, pickup_status,
               created_by, notes)
            VALUES (?, ?, ?, ?, ?, 0, ?, 'contado', 'pagado', 'efectivo',
-                   ?, ?, ?, 'pendiente', ?, ?)`,
+                   ?, ?, ?, 'entregado', ?, ?)`,
           [
             organizationId,
             invoiceNumber,
@@ -768,7 +773,8 @@ export async function approveCashClaim(request, reply) {
     await publishCatalogUpdate(organizationId, stockChanges, { connection });
 
     return reply.send({
-      message: "Solicitud aprobada. La venta quedó registrada y el stock descontado.",
+      message:
+        "Solicitud aprobada. La venta quedó registrada, el stock descontado y la entrega marcada como realizada.",
       claim: {
         id: Number(id),
         claim_code: claim.claim_code,
@@ -779,6 +785,7 @@ export async function approveCashClaim(request, reply) {
         id: saleId,
         invoice_number: invoiceNumber,
         pickup_code: claim.claim_code,
+        pickup_status: "entregado",
         total: subtotal,
       },
     });

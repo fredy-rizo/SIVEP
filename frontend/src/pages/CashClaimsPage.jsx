@@ -151,7 +151,7 @@ export function CashClaimsPage() {
       );
       toast.success(
         'Solicitud aprobada',
-        `Código de reclamo: ${response.data.sale.pickup_code}`,
+        `Entrega registrada · Código: ${response.data.sale.pickup_code}`,
       );
       setApproveOpen(false);
       closeDetail();
@@ -648,10 +648,13 @@ export function CashClaimsPage() {
                   el {formatDateTime(detail.claim.reviewed_at)}
                 </p>
                 <p>
-                  Factura {detail.claim.invoice_number} · Código de reclamo{' '}
+                  Factura {detail.claim.invoice_number} · Código{' '}
                   <span className="font-mono font-bold">
                     {detail.claim.sale_pickup_code}
                   </span>
+                </p>
+                <p className="mt-1 font-medium">
+                  Entrega registrada automáticamente al aprobar.
                 </p>
               </div>
             )}
@@ -695,8 +698,8 @@ export function CashClaimsPage() {
               <span className="font-mono font-semibold">
                 {detail.claim.claim_code}
               </span>
-              . Se creará la venta, se descontará el stock y se habilitará el
-              código de reclamo. Esta acción no se puede deshacer.
+              . Se creará la venta, se descontará el stock y la entrega quedará
+              marcada como realizada. Esta acción no se puede deshacer.
             </p>
 
             <div className="rounded-xl border border-gray-200 p-4 text-sm">

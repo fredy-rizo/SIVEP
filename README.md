@@ -191,9 +191,9 @@ SIVEP/
   cliente pagó en la caja de la Universidad y registra el código del recibo,
   sus datos, los productos comprados y una foto/PDF del recibo. La solicitud
   **no descuenta stock**: un administrador valida el recibo y solo al aprobar se
-  crea la venta, se descuenta el inventario y se habilita el código de reclamo.
-  Incluye una pestaña para consultar el estado con el código de solicitud y el
-  documento del comprador.
+  crea la venta, se descuenta el inventario y la entrega queda marcada como
+  realizada. Incluye una pestaña para consultar el estado con el código de
+  solicitud y el documento del comprador.
 - **Planes (`/planes`)**: catálogo público de planes y servicios.
 - **Legales**: `privacidad`, `terminos`, `reembolsos`, `cookies`.
 
@@ -298,7 +298,8 @@ habilitan según el plan contratado (ver [Monetización](#monetización)).
 - `GET /api/cash-claims` — listado con filtros por estado, texto y fechas
 - `GET /api/cash-claims/:id` — detalle con ítems, stock actual y recibo
 - `POST /api/cash-claims/:id/approve` — crea la venta, descuenta stock de forma
-  atómica y usa el código de la solicitud como código de reclamo
+  atómica, usa el código de la solicitud como código de la compra y deja la
+  entrega marcada como `entregado`
   (`409 INSUFFICIENT_STOCK` si no alcanza; se revierte todo)
 - `POST /api/cash-claims/:id/reject` — guarda el motivo; no toca el inventario
 

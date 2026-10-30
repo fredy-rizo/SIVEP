@@ -383,8 +383,8 @@ export function PublicFormPage() {
                   </li>
                   <li>
                     <span className="font-semibold">4.</span> Cuando un
-                    administrador apruebe, se descuenta el stock y ese mismo
-                    código sirve para reclamar.
+                    administrador apruebe, se descuenta el stock y la entrega
+                    queda registrada automáticamente con ese mismo código.
                   </li>
                 </ol>
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
@@ -586,7 +586,7 @@ export function PublicFormPage() {
               <li>• Efectivo: registra el código y adjunta el recibo de caja.</li>
               <li>• Cada comprobante o recibo se usa una sola vez.</li>
               <li>
-                • En efectivo, el código de reclamo se habilita cuando el
+                • En efectivo, la entrega se marca como realizada cuando el
                 administrador aprueba la solicitud.
               </li>
             </ul>

@@ -43,7 +43,7 @@ const STATUS_META = {
     className: 'badge-success',
     icon: CheckCircle,
     description:
-      'Tu compra fue validada. Ya puedes reclamar tus productos con el código indicado.',
+      'Tu compra fue validada y la entrega quedó registrada como realizada.',
   },
   rechazada: {
     label: 'Rechazada',
@@ -366,8 +366,8 @@ export function CashPurchasePage() {
               {result.claim_code}
             </p>
             <p className="mt-2 text-xs text-unal-secondary-light sm:text-sm">
-              Guárdalo. Con este mismo código reclamarás tus productos si la
-              solicitud es aprobada.
+              Guárdalo. Si la solicitud es aprobada, este código identifica tu
+              compra y la entrega se registra automáticamente.
             </p>
           </div>
 
@@ -589,7 +589,7 @@ export function CashPurchasePage() {
                   {lookupResult.status === 'aprobada' && lookupResult.sale && (
                     <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                       <p className="text-sm font-medium text-green-800">
-                        Código de reclamo
+                        Código de la compra
                       </p>
                       <p className="font-mono text-2xl font-bold tracking-widest text-green-900">
                         {lookupResult.sale.pickup_code}
@@ -597,7 +597,7 @@ export function CashPurchasePage() {
                       <p className="mt-1 text-sm text-green-800">
                         Factura {lookupResult.sale.invoice_number} ·{' '}
                         {lookupResult.sale.pickup_status === 'entregado'
-                          ? 'Entregado'
+                          ? 'Entrega registrada'
                           : 'Pendiente de entrega'}
                       </p>
                     </div>

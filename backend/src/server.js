@@ -23,6 +23,7 @@ import cashClaimsRoutes from "./routes/cashClaimsRoutes.js";
 import cookiesRoutes from "./routes/cookiesRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import adminBillingRoutes from "./routes/adminBillingRoutes.js";
+import filesRoutes from "./routes/filesRoutes.js";
 import { startSubscriptionLifecycle } from "./services/subscriptionLifecycle.js";
 import { startPendingOrdersLifecycle } from "./services/pendingOrdersLifecycle.js";
 import { registerStockHub, getRealtimeStats } from "./realtime/stockHub.js";
@@ -136,6 +137,7 @@ async function start() {
     fastify.register(cookiesRoutes, { prefix: "/api/cookies" });
     fastify.register(billingRoutes, { prefix: "/api/billing" });
     fastify.register(adminBillingRoutes, { prefix: "/api/admin" });
+    fastify.register(filesRoutes, { prefix: "/api/files" });
 
     // Salud del servicio + estado del canal en tiempo real. Útil para saber si
     // hay clientes conectados sin abrir una consola de base de datos.

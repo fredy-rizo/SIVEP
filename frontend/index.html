@@ -1,14 +1,177 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-CO">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/escudo-unal.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SIVEP - Sistema de Inventario, Ventas y Producción - Granja El Cairo" />
-    <title>SIVEP - Granja El Cairo</title>
-  </head>
-  <body>
-    <div id="root"></div>
+
+    <!-- SEO básico -->
+    <title>SIVEP | Granja El Cairo - UNAL Sede Orinoquía</title>
+    <meta
+      name="description"
+      content="Granja El Cairo de la Universidad Nacional de Colombia Sede Orinoquía: compra huevos, gallinas ponedoras, peces, miel y porcinos frescos. SIVEP gestiona inventario, ventas y producción en Arauca."
+    />
+    <meta
+      name="keywords"
+      content="SIVEP, Granja El Cairo, Universidad Nacional de Colombia, UNAL, Sede Orinoquía, Arauca, granja universitaria, granja, huevos, gallinas ponedoras, peces, cachama, miel, porcinos, marranos, productos frescos, inventario, ventas, producción"
+    />
+    <meta name="author" content="Universidad Nacional de Colombia - Sede Orinoquía" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="googlebot" content="index, follow" />
+    <meta name="theme-color" content="#8B1E3F" />
+    <link rel="canonical" href="https://sivep.vercel.app/" />
+    <link rel="alternate" hreflang="es-CO" href="https://sivep.vercel.app/" />
+    <link
+      rel="sitemap"
+      type="application/xml"
+      title="Sitemap"
+      href="/sitemap.xml"
+    />
+
+    <!-- Datos geográficos -->
+    <meta name="geo.region" content="CO-ARA" />
+    <meta name="geo.placename" content="Arauca, Colombia" />
+    <meta name="geo.position" content="7.0847;-70.7591" />
+    <meta name="ICBM" content="7.0847, -70.7591" />
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SIVEP - Granja El Cairo" />
+    <meta property="og:locale" content="es_CO" />
+    <meta property="og:url" content="https://sivep.vercel.app/" />
+    <meta
+      property="og:title"
+      content="SIVEP | Granja El Cairo - UNAL Sede Orinoquía"
+    />
+    <meta
+      property="og:description"
+      content="Productos frescos de la Granja El Cairo de la Universidad Nacional de Colombia Sede Orinoquía: huevos, gallinas ponedoras, peces, miel y porcinos."
+    />
+    <meta
+      property="og:image"
+      content="https://sivep.vercel.app/peces-cachama.jpg"
+    />
+    <meta property="og:image:alt" content="Granja El Cairo - UNAL Sede Orinoquía" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="SIVEP | Granja El Cairo - UNAL Sede Orinoquía"
+    />
+    <meta
+      name="twitter:description"
+      content="Productos frescos de la Granja El Cairo de la Universidad Nacional de Colombia Sede Orinoquía."
+    />
+    <meta
+      name="twitter:image"
+      content="https://sivep.vercel.app/peces-cachama.jpg"
+    />
+
+    <!-- Datos estructurados para buscadores -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "additionalType": "https://schema.org/Farm",
+        "@id": "https://sivep.vercel.app/#granja",
+        "name": "Granja El Cairo - SIVEP",
+        "alternateName": [
+          "SIVEP",
+          "Sistema de Inventario, Ventas y Producción",
+          "Granja El Cairo",
+          "Granja El Cairo UNAL",
+          "Universidad Nacional de Colombia Sede Orinoquía"
+        ],
+        "url": "https://sivep.vercel.app/",
+        "logo": "https://sivep.vercel.app/escudo-unal.png",
+        "image": "https://sivep.vercel.app/peces-cachama.jpg",
+        "description": "Granja universitaria de la Universidad Nacional de Colombia Sede Orinoquía. Produce y vende huevos, gallinas ponedoras, peces, miel y porcinos frescos en Arauca, Colombia. SIVEP es su sistema de inventario, ventas y producción.",
+        "email": "granjaelcairo@unal.edu.co",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Arauca",
+          "addressRegion": "Arauca",
+          "addressCountry": "CO"
+        },
+        "areaServed": {
+          "@type": "Place",
+          "name": "Arauca, Colombia"
+        },
+        "parentOrganization": {
+          "@type": "CollegeOrUniversity",
+          "name": "Universidad Nacional de Colombia - Sede Orinoquía",
+          "url": "https://orinoquia.unal.edu.co/"
+        },
+        "knowsAbout": [
+          "Granja universitaria",
+          "Producción avícola",
+          "Gallinas ponedoras",
+          "Huevos frescos",
+          "Piscicultura",
+          "Cachama",
+          "Apicultura",
+          "Miel",
+          "Porcinocultura",
+          "Inventario",
+          "Ventas",
+          "Producción agropecuaria"
+        ],
+        "makesOffer": [
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Product",
+              "name": "Huevos frescos"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Product",
+              "name": "Gallinas ponedoras"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Product",
+              "name": "Peces y cachama"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Product",
+              "name": "Miel"
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Product",
+              "name": "Porcinos"
+            }
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://sivep.vercel.app/#website",
+        "url": "https://sivep.vercel.app/",
+        "name": "SIVEP - Granja El Cairo",
+        "alternateName": "SIVEP UNAL Sede Orinoquía",
+        "description": "Sistema de inventario, ventas y producción de la Granja El Cairo de la Universidad Nacional de Colombia Sede Orinoquía.",
+        "inLanguage": "es-CO",
+        "publisher": {
+          "@id": "https://sivep.vercel.app/#granja"
+        }
+      }
+    </script>
+
     <script>
       try {
         if (localStorage.getItem('sivep-theme') === 'dark') {
@@ -16,6 +179,28 @@
         }
       } catch (e) {}
     </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <h1>SIVEP - Granja El Cairo, Universidad Nacional de Colombia Sede Orinoquía</h1>
+      <p>
+        SIVEP es el Sistema de Inventario, Ventas y Producción de la Granja El
+        Cairo, una granja universitaria de la Universidad Nacional de Colombia
+        (UNAL) Sede Orinoquía, ubicada en Arauca, Colombia.
+      </p>
+      <p>
+        Productos disponibles: huevos frescos, gallinas ponedoras, peces
+        (cachama), miel y porcinos. Para comprar, visita la página de la UNAL y
+        registra tu comprobante en SIVEP.
+      </p>
+      <p>
+        <a href="https://sivep.vercel.app/">Inicio</a> ·
+        <a href="https://sivep.vercel.app/planes">Planes</a> ·
+        <a href="https://sivep.vercel.app/formulario-compra">Registrar compra</a>
+      </p>
+      <p>Contacto: granjaelcairo@unal.edu.co</p>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

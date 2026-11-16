@@ -211,7 +211,7 @@ SIVEP/
 - **Clientes (`/clientes`)**: listado, comprobantes y aprobación/rechazo.
 - **Inventario (`/inventario`)**: stock actual, movimientos e historial.
 - **Reportes (`/reportes`)**: ventas, inventario y clientes con exportación CSV, más
-  analítica avanzada (pronóstico, afinidad, velocidad/aceleración y EOQ).
+  analítica avanzada (pronóstico, velocidad/aceleración y EOQ).
 - **Mi plan (`/mi-plan`)**: plan actual, límites, uso y solicitudes de servicio.
 - **Usuarios (`/usuarios`)**: solo `super_admin`, CRUD de administradores.
 - **Monetización (`/admin/monetizacion`)**: solo `super_admin`, panel de organizaciones,
@@ -274,9 +274,10 @@ habilitan según el plan contratado (ver [Monetización](#monetización)).
 ### Analítica (álgebra lineal y cálculo diferencial)
 
 - `GET /api/reports/forecast` — pronóstico de ventas (mínimos cuadrados)
-- `GET /api/reports/affinity` — afinidad entre productos (similitud coseno)
 - `GET /api/reports/rate` — velocidad y aceleración (1ª y 2ª derivada)
 - `GET /api/reports/eoq` — cantidad económica de pedido / inventario óptimo (EOQ)
+
+Documentación detallada de ambos módulos: [`docs/README_ANALITICA.md`](docs/README_ANALITICA.md).
 
 ### Facturación y planes
 
@@ -330,7 +331,7 @@ plan; los precios del catálogo se administran desde el panel y no se documentan
 
 Las rutas de analítica están protegidas por feature:
 
-- `analytics.algebra` (`/api/reports/forecast`, `/api/reports/affinity`)
+- `analytics.algebra` (`/api/reports/forecast`)
 - `analytics.calculus` (`/api/reports/rate`, `/api/reports/eoq`)
 
 Requieren plan **Profesional** o superior. Si el plan no incluye la función, el

@@ -56,9 +56,8 @@ export function ReportsPage() {
   const [salesReport, setSalesReport] = useState(null);
   const [inventoryReport, setInventoryReport] = useState(null);
   const [customersReport, setCustomersReport] = useState(null);
-  // Pronóstico (álgebra lineal): recta de tendencia + afinidad de productos.
+  // Pronóstico (álgebra lineal): recta de tendencia por mínimos cuadrados.
   const [forecast, setForecast] = useState(null);
-  const [affinity, setAffinity] = useState([]);
   // Cálculo diferencial: ritmo de ventas (derivadas) y pedido óptimo (EOQ).
   const [rate, setRate] = useState(null);
   const [eoq, setEoq] = useState(null);
@@ -86,15 +85,10 @@ export function ReportsPage() {
     // gating aquí, pero el backend es la autoridad final.
     try {
       if (hasFeature("analytics.algebra")) {
-        const [forecastRes, affinityRes] = await Promise.all([
-          api.get("/reports/forecast?days=7"),
-          api.get("/reports/affinity?limit=5"),
-        ]);
+        const forecastRes = await api.get("/reports/forecast?days=7");
         setForecast(forecastRes.data);
-        setAffinity(affinityRes.data.pairs || []);
       } else {
         setForecast(null);
-        setAffinity([]);
       }
 
       if (hasFeature("analytics.calculus")) {
@@ -111,7 +105,6 @@ export function ReportsPage() {
     } catch (error) {
       console.error("No se pudo cargar la analítica:", error);
       setForecast(null);
-      setAffinity([]);
       setRate(null);
       setEoq(null);
     }
@@ -148,6 +141,14 @@ export function ReportsPage() {
     if (!salesReport) return null;
     const { summary, dailySales, topProducts, topCustomers, paymentTypeStats } =
       salesReport;
+    const chartDailySales = dailySales.map((d) => ({
+      ...d,
+      total: Number(d.total),
+    }));
+    const chartPaymentTypeStats = paymentTypeStats.map((p) => ({
+      ...p,
+      total: Number(p.total),
+    }));
 
     return (
       <div className="space-y-6">
@@ -185,7 +186,7 @@ export function ReportsPage() {
             </h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailySales.slice().reverse()}>
+                <BarChart data={chartDailySales.slice().reverse()}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                   <XAxis
                     dataKey="date"
@@ -218,7 +219,7 @@ export function ReportsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={paymentTypeStats}
+                    data={chartPaymentTypeStats}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -231,7 +232,7 @@ export function ReportsPage() {
                     }
                     labelLine={false}
                   >
-                    {paymentTypeStats.map((_, index) => (
+                    {chartPaymentTypeStats.map((_, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -293,6 +294,10 @@ export function ReportsPage() {
     if (!inventoryReport) return null;
     const { summary, byCategory, lowStockProducts, movementsSummary } =
       inventoryReport;
+    const chartByCategory = byCategory.map((d) => ({
+      ...d,
+      category_value: Number(d.category_value),
+    }));
 
     return (
       <div className="space-y-6">
@@ -332,7 +337,7 @@ export function ReportsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={byCategory}
+                    data={chartByCategory}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -345,7 +350,7 @@ export function ReportsPage() {
                     }
                     labelLine={false}
                   >
-                    {byCategory.map((_, index) => (
+                    {chartByCategory.map((_, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -536,10 +541,9 @@ export function ReportsPage() {
     );
   };
 
-  // Pestaña "Pronóstico": visualiza los dos resultados del álgebra lineal.
+  // Pestaña "Pronóstico": resultado del álgebra lineal.
   // - Gráfica de líneas: historial real (30 días) + recta proyectada (7 días).
   // - KPIs: tendencia $/día (pendiente m), confianza R² y total pronosticado.
-  // - Afinidad: pares de productos que se venden juntos (similitud coseno).
   const renderForecastTab = () => {
     if (!forecast) {
       return (
@@ -549,8 +553,7 @@ export function ReportsPage() {
             Pronóstico no disponible
           </p>
           <p className="text-sm text-unal-secondary-light mt-1">
-            Reinicia el backend para activar los endpoints de pronóstico y
-            afinidad.
+            Reinicia el backend para activar el endpoint de pronóstico.
           </p>
         </div>
       );
@@ -729,48 +732,6 @@ export function ReportsPage() {
             </div>
           </div>
         )}
-
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-unal-secondary mb-1">
-            Productos que se venden juntos
-          </h3>
-          <p className="text-sm text-unal-secondary-light mb-4">
-            Afinidad por similitud coseno entre perfiles de compra (90 días).
-            Útil para armar combos.
-          </p>
-          {affinity.length === 0 ? (
-            <p className="text-unal-secondary-light text-sm py-4 text-center">
-              Aún no hay suficientes ventas para calcular afinidades.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {affinity.map((pair, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 p-3 rounded-lg bg-gray-50"
-                >
-                  <span className="font-medium text-unal-secondary flex-1">
-                    {pair.productA}{" "}
-                    <span className="text-unal-secondary-light font-normal">
-                      + {pair.productB}
-                    </span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-unal-accent rounded-full"
-                        style={{ width: `${pair.percent}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-unal-primary w-12 text-right">
-                      {pair.percent}%
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     );
   };
@@ -778,94 +739,94 @@ export function ReportsPage() {
   // Pestaña "Optimización": resultado del cálculo diferencial aplicado a
   // inventario (EOQ). Muestra, por producto, el pedido que minimiza el costo
   // total (q* = √(2DS/H)) y el ahorro frente a una política ingenua.
-  const renderEoqTab = () => {
-    if (!eoq) {
-      return (
-        <div className="card p-8 text-center">
-          <Calculator className="w-10 h-10 mx-auto mb-3 text-unal-secondary-light" />
-          <p className="text-unal-secondary font-medium">
-            Optimización no disponible
-          </p>
-          <p className="text-sm text-unal-secondary-light mt-1">
-            Reinicia el backend para activar el endpoint de pedido óptimo (EOQ).
-          </p>
-        </div>
-      );
-    }
+  // const renderEoqTab = () => {
+  //   if (!eoq) {
+  //     return (
+  //       <div className="card p-8 text-center">
+  //         <Calculator className="w-10 h-10 mx-auto mb-3 text-unal-secondary-light" />
+  //         <p className="text-unal-secondary font-medium">
+  //           Optimización no disponible
+  //         </p>
+  //         <p className="text-sm text-unal-secondary-light mt-1">
+  //           Reinicia el backend para activar el endpoint de pedido óptimo (EOQ).
+  //         </p>
+  //       </div>
+  //     );
+  //   }
 
-    const { products = [], parameters = {} } = eoq;
+  //   const { products = [], parameters = {} } = eoq;
 
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <KPICard
-            title="Ahorro potencial anual"
-            value={eoq.totalPotentialSavingsFormatted || formatCOP(0)}
-            icon={<DollarSign className="w-6 h-6" />}
-            iconBg="bg-unal-accent/10"
-          />
-          <KPICard
-            title="Productos analizados"
-            value={eoq.count || 0}
-            icon={<Package className="w-6 h-6" />}
-            iconBg="bg-unal-primary/10"
-          />
-          <KPICard
-            title="Costo por pedido (S)"
-            value={parameters.orderCostFormatted || formatCOP(0)}
-            icon={<Calculator className="w-6 h-6" />}
-            iconBg="bg-unal-secondary/10"
-          />
-        </div>
+  //   return (
+  //     <div className="space-y-6">
+  //       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  //         <KPICard
+  //           title="Ahorro potencial anual"
+  //           value={eoq.totalPotentialSavingsFormatted || formatCOP(0)}
+  //           icon={<DollarSign className="w-6 h-6" />}
+  //           iconBg="bg-unal-accent/10"
+  //         />
+  //         <KPICard
+  //           title="Productos analizados"
+  //           value={eoq.count || 0}
+  //           icon={<Package className="w-6 h-6" />}
+  //           iconBg="bg-unal-primary/10"
+  //         />
+  //         <KPICard
+  //           title="Costo por pedido (S)"
+  //           value={parameters.orderCostFormatted || formatCOP(0)}
+  //           icon={<Calculator className="w-6 h-6" />}
+  //           iconBg="bg-unal-secondary/10"
+  //         />
+  //       </div>
 
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold text-unal-secondary mb-1">
-            Pedido óptimo por producto (EOQ)
-          </h3>
-          {/* <p className="text-sm text-unal-secondary-light mb-4">
-            q* = √(2·D·S / H) minimiza el costo total (criterio de la 2ª
-            derivada). Costo de mantener H ={" "}
-            {Math.round((parameters.holdingRate || 0) * 100)}% anual del valor
-            de la unidad; costo de pedir S ={" "}
-            {parameters.orderCostFormatted || formatCOP(0)}. Demanda proyectada
-            desde los últimos {parameters.windowDays} días.
-          </p> */}
-          <DataTable
-            columns={[
-              { key: "name", label: "Producto" },
-              {
-                key: "annualDemand",
-                label: "Demanda anual",
-                render: (v, row) => `${v} ${row.unit || ""}`,
-              },
-              {
-                key: "quantity",
-                label: "Pedido óptimo (q*)",
-                render: (v, row) => `${v} ${row.unit || ""}`,
-              },
-              { key: "ordersPerYear", label: "Pedidos/año" },
-              {
-                key: "cycleDays",
-                label: "Cada",
-                render: (v) => `${v} días`,
-              },
-              { key: "currentStock", label: "Stock actual" },
-              {
-                key: "suggestedOrder",
-                label: "Pedir ahora",
-                render: (v, row) => `${v} ${row.unit || ""}`,
-              },
-              { key: "savingsFormatted", label: "Ahorro anual" },
-            ]}
-            data={products}
-            keyField="id"
-            pagination={false}
-            emptyMessage="Aún no hay demanda suficiente para calcular el pedido óptimo"
-          />
-        </div>
-      </div>
-    );
-  };
+  //       <div className="card p-6">
+  //         <h3 className="text-lg font-semibold text-unal-secondary mb-1">
+  //           Pedido óptimo por producto (EOQ)
+  //         </h3>
+  //         {/* <p className="text-sm text-unal-secondary-light mb-4">
+  //           q* = √(2·D·S / H) minimiza el costo total (criterio de la 2ª
+  //           derivada). Costo de mantener H ={" "}
+  //           {Math.round((parameters.holdingRate || 0) * 100)}% anual del valor
+  //           de la unidad; costo de pedir S ={" "}
+  //           {parameters.orderCostFormatted || formatCOP(0)}. Demanda proyectada
+  //           desde los últimos {parameters.windowDays} días.
+  //         </p> */}
+  //         <DataTable
+  //           columns={[
+  //             { key: "name", label: "Producto" },
+  //             {
+  //               key: "annualDemand",
+  //               label: "Demanda anual",
+  //               render: (v, row) => `${v} ${row.unit || ""}`,
+  //             },
+  //             {
+  //               key: "quantity",
+  //               label: "Pedido óptimo (q*)",
+  //               render: (v, row) => `${v} ${row.unit || ""}`,
+  //             },
+  //             { key: "ordersPerYear", label: "Pedidos/año" },
+  //             {
+  //               key: "cycleDays",
+  //               label: "Cada",
+  //               render: (v) => `${v} días`,
+  //             },
+  //             { key: "currentStock", label: "Stock actual" },
+  //             {
+  //               key: "suggestedOrder",
+  //               label: "Pedir ahora",
+  //               render: (v, row) => `${v} ${row.unit || ""}`,
+  //             },
+  //             { key: "savingsFormatted", label: "Ahorro anual" },
+  //           ]}
+  //           data={products}
+  //           keyField="id"
+  //           pagination={false}
+  //           emptyMessage="Aún no hay demanda suficiente para calcular el pedido óptimo"
+  //         />
+  //       </div>
+  //     </div>
+  //   );
+  // };
 
   return (
     <div className="space-y-6">
@@ -917,12 +878,12 @@ export function ReportsPage() {
             icon: Brain,
             feature: "analytics.algebra",
           },
-          {
-            id: "optimization",
-            label: "Optimización",
-            icon: Calculator,
-            feature: "analytics.calculus",
-          },
+          // {
+          //   id: "optimization",
+          //   label: "Optimización",
+          //   icon: Calculator,
+          //   feature: "analytics.calculus",
+          // },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -955,12 +916,12 @@ export function ReportsPage() {
               renderForecastTab()
             ) : (
               <LockedFeature
-                title="Proyecciones y afinidad de productos"
+                title="Proyección de ventas"
                 featureLabel="Álgebra lineal · Plan Profesional"
-                description="El pronóstico de ventas por mínimos cuadrados y la afinidad entre productos (similitud coseno) están disponibles desde el plan Profesional."
+                description="El pronóstico de ventas por mínimos cuadrados está disponible desde el plan Profesional."
               />
             ))}
-          {activeTab === "optimization" &&
+          {/* {activeTab === "optimization" &&
             (hasFeature("analytics.calculus") ? (
               renderEoqTab()
             ) : (
@@ -969,7 +930,7 @@ export function ReportsPage() {
                 featureLabel="Cálculo diferencial · Plan Profesional"
                 description="La velocidad/aceleración de ventas (derivadas) y el tamaño económico de pedido (EOQ) están disponibles desde el plan Profesional."
               />
-            ))}
+            ))} */}
         </>
       )}
 

@@ -38,9 +38,23 @@ export function DashboardPage() {
           api.get('/sales?limit=5')
         ]);
 
-        setStats(statsRes.data.summary);
-        setSalesChartData(salesRes.data.dailySales || []);
-        setTopProductsData(productsRes.data.byCategory || []);
+        setStats({
+          ...statsRes.data.summary,
+          total_products: productsRes.data.summary?.total_products || 0,
+          low_stock_products: productsRes.data.summary?.low_stock_products || 0,
+        });
+        setSalesChartData(
+          (salesRes.data.dailySales || []).map((d) => ({
+            ...d,
+            total: Number(d.total),
+          })),
+        );
+        setTopProductsData(
+          (productsRes.data.byCategory || []).map((d) => ({
+            ...d,
+            category_value: Number(d.category_value),
+          })),
+        );
         setRecentSales(recentRes.data.data || []);
       } catch (error) {
         console.error('Error fetching dashboard:', error);

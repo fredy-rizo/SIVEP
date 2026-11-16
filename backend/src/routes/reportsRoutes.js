@@ -6,7 +6,6 @@ import {
   exportInventoryCSV,
   exportCustomersCSV,
   getSalesForecast,
-  getProductAffinity,
   getSalesRate,
   getEoqOptimization,
 } from "../controllers/reportsController.js";
@@ -69,14 +68,6 @@ export default async function reportsRoutes(fastify) {
       preHandler: [authenticateToken(fastify), requireFeature("analytics.algebra")],
     },
     getSalesForecast,
-  );
-
-  fastify.get(
-    "/affinity",
-    {
-      preHandler: [authenticateToken(fastify), requireFeature("analytics.algebra")],
-    },
-    getProductAffinity,
   );
 
   // Cálculo diferencial: velocidad/aceleración de ventas (1ª y 2ª derivada).

@@ -7,5 +7,6 @@ dist/
 # Logs y temporales
 *.log
 uploads/comprobantes/*
+docs/
 !uploads/comprobantes/.gitkeep
 .DS_Store

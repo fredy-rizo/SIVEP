@@ -2,81 +2,24 @@
 // ÁLGEBRA LINEAL APLICADA A SIVEP — Granja El Cairo
 // ----------------------------------------------------------------------------
 // ¿POR QUÉ álgebra lineal aquí?
-//   La granja necesita responder dos preguntas con datos, no con intuición:
-//   1) "¿Cuánto vamos a vender los próximos días?" (planificar producción).
-//   2) "¿Qué productos se venden juntos?" (armar combos y ofertas).
-//   Ambas se responden con vectores y matrices, sin librerías externas: todo
-//   está implementado desde cero en este archivo con fines didácticos.
+//   La granja necesita responder con datos, no con intuición:
+//   "¿Cuánto vamos a vender los próximos días?" (planificar producción).
+//   Se responde con matrices, sin librerías externas: todo está implementado
+//   desde cero en este archivo con fines didácticos.
 //
-// ¿PARA QUÉ sirve cada parte?
-//   - Operaciones con vectores (punto, norma, coseno) .... miden PARECIDO
-//     entre productos según quién los compra (recomendación/afinidades).
-//   - Operaciones con matrices (transpuesta, producto, inversa) .... permiten
-//     resolver el sistema de ECUACIONES NORMALES y así trazar la RECTA DE
-//     TENDENCIA de las ventas (pronóstico por mínimos cuadrados).
+// ¿PARA QUÉ sirve?
+//   Las operaciones con matrices (transpuesta, producto, inversa) permiten
+//   resolver el sistema de ECUACIONES NORMALES y así trazar la RECTA DE
+//   TENDENCIA de las ventas (pronóstico por mínimos cuadrados).
 //
 // ¿CÓMO funciona en el sistema?
 //   - Pronóstico: se toman las ventas diarias (y) numerando los días (x =
 //     1, 2, 3, ...) y se ajusta la recta y ≈ m·x + b que minimiza el error
 //     cuadrático. Con esa recta se proyectan los próximos días.
-//   - Afinidad: cada producto se representa como un VECTOR donde cada
-//     componente es cuánto compró un cliente de ese producto. El coseno del
-//     ángulo entre dos vectores (0 a 1) indica qué tan "juntos" se venden.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
-// SECCIÓN 1: VECTORES
-// Un vector es una lista ordenada de números. Aquí un vector representa, por
-// ejemplo, "lo que cada cliente compró de un producto": [2, 0, 5, ...].
-// ---------------------------------------------------------------------------
-
-// PRODUCTO PUNTO: u·v = u1*v1 + u2*v2 + ... + un*vn
-// ¿Por qué? Es la operación base de casi todo: mide cuánto "apuntan" dos
-// vectores en la misma dirección. Si dos productos los compran las mismas
-// personas en cantidades parecidas, su producto punto es grande.
-// ¿Para qué? Es el numerador de la similitud coseno (ver abajo).
-export function dot(a, b) {
-  // Ambos vectores deben vivir en el mismo espacio (misma dimensión).
-  if (a.length !== b.length) {
-    throw new Error('Los vectores deben tener la misma longitud');
-  }
-  // Se multiplica componente a componente y se acumula la suma.
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    sum += a[i] * b[i];
-  }
-  return sum;
-}
-
-// NORMA EUCLIDIANA: ||v|| = √(v·v) = √(v1² + v2² + ... + vn²)
-// ¿Por qué? Es la "longitud" del vector (teorema de Pitágoras generalizado).
-// ¿Para qué? Para NORMALIZAR: dividir un vector por su norma lo deja de
-// longitud 1, de modo que al compararlo con otro solo importe la DIRECCIÓN
-// (el patrón de compra) y no la MAGNITUD (si se vende mucho o poco).
-export function norm(v) {
-  // La norma es la raíz cuadrada del producto punto del vector consigo mismo.
-  return Math.sqrt(dot(v, v));
-}
-
-// SIMILITUD COSENO: cos(θ) = (u·v) / (||u|| · ||v||), resultado entre 0 y 1
-// ¿Por qué? Del producto punto: u·v = ||u||·||v||·cos(θ). Despejando el coseno
-// se obtiene el coseno del ÁNGULO entre los vectores: 1 = misma dirección
-// (se venden juntos), 0 = perpendiculares (nada que ver el uno con el otro).
-// ¿Para qué? Es la métrica de AFINIDAD entre productos de la granja.
-// ¿Cómo? Se divide el producto punto entre las normas para que el tamaño de
-// las ventas no distorsione la comparación (un producto muy vendido y uno
-// poco vendido pueden tener afinidad 1 si los compran las mismas personas).
-export function cosineSimilarity(a, b) {
-  const normA = norm(a);
-  const normB = norm(b);
-  // Si algún vector es cero (producto que nadie compró) no hay ángulo
-  // definible: se devuelve 0 (sin afinidad) en vez de dividir por cero.
-  if (normA === 0 || normB === 0) return 0;
-  return dot(a, b) / (normA * normB);
-}
-
-// ---------------------------------------------------------------------------
-// SECCIÓN 2: MATRICES
+// SECCIÓN 1: MATRICES
 // Una matriz es una tabla de números (arreglo de arreglos). Aquí la usamos
 // para plantear el sistema de ecuaciones del pronóstico de ventas.
 // ---------------------------------------------------------------------------
@@ -193,7 +136,7 @@ export function solve(A, b) {
 }
 
 // ---------------------------------------------------------------------------
-// SECCIÓN 3: APLICACIÓN 1 — PRONÓSTICO DE VENTAS (mínimos cuadrados)
+// SECCIÓN 2: APLICACIÓN — PRONÓSTICO DE VENTAS (mínimos cuadrados)
 // ---------------------------------------------------------------------------
 // Planteo: se tienen n días con ventas y₁..yₙ. Se propone el modelo lineal
 //   y ≈ m·x + b   (x = número del día: 1, 2, 3, ...)
@@ -255,45 +198,4 @@ export function forecastNext(yValues, days = 7) {
     predictions.push(Math.max(0, intercept + slope * (n + d)));
   }
   return { slope, intercept, r2, predictions };
-}
-
-// ---------------------------------------------------------------------------
-// SECCIÓN 4: APLICACIÓN 2 — AFINIDAD ENTRE PRODUCTOS (similitud coseno)
-// ---------------------------------------------------------------------------
-// Planteo: con la matriz de compras (filas = clientes, columnas = productos,
-// celda = cantidad comprada), cada COLUMNA es el "vector perfil" de un
-// producto en el espacio de los clientes. Dos productos con vectores que
-// apuntan parecido (ángulo pequeño, coseno ≈ 1) los compran las mismas
-// personas → "se venden juntos" → sirven para combos y exhibición conjunta.
-// ---------------------------------------------------------------------------
-
-// Calcula la afinidad de cada par de productos y devuelve los mejores pares.
-// ¿Por qué pares? La afinidad es una relación entre DOS productos, así que se
-// comparan todas las combinaciones i<j (triángulo superior, sin repetidos).
-// ¿Para qué? Descubrir duplas como "quien compra Huevos también lleva Miel".
-// ¿Cómo? Para cada par se toma su columna-vector y se aplica similitud
-// coseno; se descartan pares sin co-ocurrencia (coseno 0) y se ordena de
-// mayor a menor afinidad.
-export function productAffinity(matrix) {
-  const numCustomers = matrix.length;
-  if (numCustomers === 0) return [];
-  const numProducts = matrix[0].length;
-  // Extraer cada columna (perfil de compra de un producto) como vector.
-  const columns = [];
-  for (let j = 0; j < numProducts; j++) {
-    columns.push(matrix.map((row) => row[j] || 0));
-  }
-  const pairs = [];
-  for (let i = 0; i < numProducts; i++) {
-    for (let j = i + 1; j < numProducts; j++) {
-      // El coseno entre los perfiles mide qué tan juntos se venden.
-      const similarity = cosineSimilarity(columns[i], columns[j]);
-      if (similarity > 0) {
-        pairs.push({ productA: i, productB: j, affinity: similarity });
-      }
-    }
-  }
-  // Orden descendente: primero las duplas con mayor afinidad.
-  pairs.sort((a, b) => b.affinity - a.affinity);
-  return pairs;
 }

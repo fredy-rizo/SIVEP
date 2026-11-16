@@ -222,7 +222,7 @@ export const featureCatalog = [
   { code: "core.products", name: "Productos", category: "Operación", kind: "boolean", description: "Catálogo de productos", sort_order: 13 },
   { code: "reports.basic", name: "Reportes básicos", category: "Reportes", kind: "boolean", description: "Reportes de ventas, inventario y clientes con exportación CSV", sort_order: 20 },
   { code: "reports.advanced", name: "Reportes avanzados", category: "Reportes", kind: "boolean", description: "Analítica avanzada y series de tiempo", sort_order: 21 },
-  { code: "analytics.algebra", name: "Proyecciones (Álgebra lineal)", category: "Analítica", kind: "boolean", description: "Pronóstico de ventas y afinidad de productos", sort_order: 30 },
+  { code: "analytics.algebra", name: "Proyecciones (Álgebra lineal)", category: "Analítica", kind: "boolean", description: "Pronóstico de ventas por mínimos cuadrados", sort_order: 30 },
   { code: "analytics.calculus", name: "Ritmo y optimización (Cálculo diferencial)", category: "Analítica", kind: "boolean", description: "Velocidad/aceleración de ventas y pedido óptimo (EOQ)", sort_order: 31 },
   { code: "public.form", name: "Formulario público personalizado", category: "Crecimiento", kind: "boolean", description: "Captación de pedidos desde la web", sort_order: 40 },
   { code: "multisite", name: "Múltiples sedes", category: "Escala", kind: "boolean", description: "Varias granjas bajo una misma cuenta", sort_order: 50 },

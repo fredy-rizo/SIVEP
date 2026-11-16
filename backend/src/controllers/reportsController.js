@@ -3,9 +3,8 @@ import { reportFiltersSchema } from "../validators/index.js";
 import { formatCOP } from "../utils/helpers.js";
 // Módulo de álgebra lineal propio de SIVEP (ver src/math/linearAlgebra.js):
 // forecastNext() usa regresión por mínimos cuadrados (ecuaciones normales con
-// matrices) para proyectar ventas; productAffinity() usa similitud coseno
-// entre vectores de compra para hallar productos que se venden juntos.
-import { forecastNext, productAffinity } from "../math/linearAlgebra.js";
+// matrices) para proyectar ventas.
+import { forecastNext } from "../math/linearAlgebra.js";
 // Módulo de cálculo diferencial propio de SIVEP (ver src/math/calculus.js):
 // rateSummary() obtiene por diferencias finitas la velocidad (1ª derivada) y
 // aceleración (2ª derivada) de las ventas; eoq()/isMinimum() resuelven por
@@ -525,69 +524,6 @@ export async function getSalesForecast(request, reply) {
 }
 
 // ============================================================================
-// AFINIDAD ENTRE PRODUCTOS CON ÁLGEBRA LINEAL (similitud coseno)
-// ----------------------------------------------------------------------------
-// ¿POR QUÉ aquí? Saber qué productos se venden juntos permite armar combos,
-// exhibirlos cerca y sugerirlos al vender (venta cruzada).
-// ¿PARA QUÉ? Devolver los pares de productos con mayor afinidad (0 a 1).
-// ¿CÓMO? Se construye la matriz compras[cliente][producto] = cantidad
-// comprada (90 días) y se llama a productAffinity(), que compara los
-// vectores-columna con similitud coseno (ver src/math/linearAlgebra.js).
-// ============================================================================
-export async function getProductAffinity(request, reply) {
-  const limit = Math.min(Math.max(parseInt(request.query.limit) || 5, 1), 20);
-
-  // Catálogo activo: define las COLUMNAS de la matriz (un vector por producto).
-  const [products] = await pool.query(
-    "SELECT id, name FROM products WHERE is_active = TRUE AND organization_id = ? ORDER BY id",
-    [request.organizationId],
-  );
-  if (products.length < 2) {
-    return reply.send({ pairs: [] });
-  }
-
-  // Cantidad total que cada cliente compró de cada producto (90 días).
-  const [rows] = await pool.query(
-    `SELECT s.customer_id as customer_id, si.product_id as product_id,
-            SUM(si.quantity) as qty
-     FROM sale_items si
-     JOIN sales s ON s.id = si.sale_id
-     WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-       AND s.organization_id = ?
-       AND si.product_id IS NOT NULL
-     GROUP BY s.customer_id, si.product_id`,
-    [request.organizationId],
-  );
-  if (rows.length === 0) {
-    return reply.send({ pairs: [] });
-  }
-
-  // Matriz compras: FILAS = clientes, COLUMNAS = productos, celda = cantidad.
-  // Se usa un mapa para ubicar cada (cliente, producto) en O(1).
-  const customerIds = [...new Set(rows.map((r) => r.customer_id))];
-  const productIds = products.map((p) => p.id);
-  const qtyByKey = new Map(
-    rows.map((r) => [`${r.customer_id}:${r.product_id}`, Number(r.qty)]),
-  );
-  const matrix = customerIds.map((cid) =>
-    productIds.map((pid) => qtyByKey.get(`${cid}:${pid}`) || 0),
-  );
-
-  // AQUÍ ocurre el álgebra lineal: cosenos entre vectores-columna.
-  const namesById = new Map(products.map((p) => [p.id, p.name]));
-  const pairs = productAffinity(matrix)
-    .slice(0, limit)
-    .map((p) => ({
-      productA: namesById.get(productIds[p.productA]),
-      productB: namesById.get(productIds[p.productB]),
-      affinity: Number(p.affinity.toFixed(3)),
-      percent: Math.round(p.affinity * 100),
-    }));
-
-  return reply.send({ pairs });
-}
-
-// ============================================================================
 // RITMO DE VENTAS CON CÁLCULO DIFERENCIAL (velocidad y aceleración)
 // ----------------------------------------------------------------------------
 // ¿POR QUÉ aquí? La recta del pronóstico indica HACIA DÓNDE van las ventas,
@@ -701,8 +637,7 @@ export async function getEoqOptimization(request, reply) {
     });
   }
 
-  // Demanda por producto en la ventana: unidades vendidas (mismo criterio que
-  // la afinidad, pero aquí interesa la CANTIDAD, no el perfil de cliente).
+  // Demanda por producto en la ventana: unidades vendidas.
   const [rows] = await pool.query(
     `SELECT si.product_id, COALESCE(SUM(si.quantity), 0) as qty
      FROM sale_items si

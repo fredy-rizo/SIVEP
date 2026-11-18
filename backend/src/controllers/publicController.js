@@ -5,7 +5,6 @@ import { generateUniquePickupCode } from "../utils/pickup.js";
 import { uploadImage } from "../utils/upload.js";
 import { readMultipart } from "../utils/multipart.js";
 import { parseEcollectReceipt } from "../utils/ecollectReceiptParser.js";
-import { buildExternalSalePlan } from "../utils/externalSaleMatching.js";
 import { fetchPublicProducts } from "../services/productCatalog.js";
 import {
   getCachedPublicProducts,
@@ -60,13 +59,82 @@ function fileExtension(filename = "") {
   return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
 }
 
+function roundMoney(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+// El formulario envía los productos como un campo JSON dentro del multipart.
+function parseItemsField(rawItems) {
+  if (Array.isArray(rawItems)) return rawItems;
+  if (typeof rawItems !== "string" || !rawItems.trim()) return [];
+  try {
+    const parsed = JSON.parse(rawItems);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// Agrupa productos repetidos: el catálogo se consulta una vez y las cantidades
+// se suman antes de calcular la venta.
+function groupQuantities(items) {
+  const quantities = new Map();
+  for (const item of items) {
+    const productId = Number(item.product_id);
+    const quantity = Number(item.quantity);
+    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+  }
+  return quantities;
+}
+
+// Construye las líneas de venta con los productos que el comprador eligió.
+// Los precios salen siempre de la base de datos, nunca del formulario.
+function buildSelectedSalePlan(items, products) {
+  const quantities = groupQuantities(items);
+  const productById = new Map(
+    products.map((product) => [Number(product.id), product]),
+  );
+
+  const missing = [...quantities.keys()].filter(
+    (productId) => !productById.has(productId),
+  );
+  if (missing.length > 0) {
+    throw {
+      statusCode: 400,
+      message:
+        "Uno o más productos ya no están disponibles. Actualiza la página e inténtalo de nuevo.",
+    };
+  }
+
+  const saleItems = [...quantities.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([productId, quantity]) => {
+      const product = productById.get(productId);
+      const unitPrice = roundMoney(product.current_price);
+      return {
+        product_id: productId,
+        description: product.name,
+        quantity,
+        unit_price: unitPrice,
+        total: roundMoney(unitPrice * quantity),
+      };
+    });
+
+  return {
+    items: saleItems,
+    total: roundMoney(
+      saleItems.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    ),
+  };
+}
+
 // ============================================================================
 // COMPRA PÚBLICA EN LÍNEA — SOLO COMPROBANTE PDF
 // ----------------------------------------------------------------------------
 // El cliente ya pagó en la página de la UNAL y sube el PDF de eCollect. Los
-// datos del cliente y de la venta salen del PDF. La venta se registra como
-// externa y, cuando el producto se puede identificar por nombre o por precio,
-// se descuenta el inventario automáticamente.
+// datos del cliente y el valor pagado salen del PDF. Además, el comprador
+// elige los productos y cantidades en el formulario; los precios se toman del
+// catálogo (nunca del cliente) y el PDF queda como evidencia del pago.
 //
 // El pago en EFECTIVO no entra por aquí: va a `cashClaimsController`, donde un
 // administrador valida el recibo antes de tocar el stock. Así no existen dos
@@ -89,10 +157,17 @@ export async function createPublicLead(request, reply) {
     const proofFilename = files.proof_file?.filename || "";
 
     const paymentMode = String(rawFields.payment_mode || "").trim();
+    const items = parseItemsField(rawFields.items);
+    if (items === null) {
+      return reply
+        .code(400)
+        .send({ error: "Los productos seleccionados no tienen un formato válido" });
+    }
 
     const { error } = publicLeadSchema.validate({
       payment_mode: paymentMode,
       accepts_policy: rawFields.accepts_policy,
+      items,
     });
     if (error) {
       return reply.code(400).send({ error: error.details[0].message });
@@ -237,9 +312,9 @@ export async function createPublicLead(request, reply) {
     }
     const createdBy = sysUsers[0].id;
 
-    // 6. Cargar productos para identificar la compra por nombre o por precio.
-    //    Se incluyen los que están sin stock: así se reconoce el producto y se
-    //    deja una advertencia en lugar de fallar.
+    // 6. Cargar los productos activos para calcular la venta con sus precios
+    //    reales. Se incluyen los que están sin stock: la venta ya se pagó y la
+    //    falta de inventario se reporta como advertencia, no como fallo.
     const [products] = await connection.query(
       `SELECT id, name, current_price
        FROM products
@@ -247,9 +322,23 @@ export async function createPublicLead(request, reply) {
       [organizationId],
     );
 
-    const plan = buildExternalSalePlan(receipt, products);
+    const plan = buildSelectedSalePlan(items, products);
     const saleItems = plan.items;
-    const warnings = [...plan.warnings];
+    const warnings = [];
+
+    // El comprobante manda en el valor pagado. Si los productos elegidos no
+    // suman lo mismo, se deja constancia para que el administrador lo revise.
+    const receiptAmount = Number(receipt.amount);
+    if (Math.abs(plan.total - receiptAmount) >= 0.01) {
+      warnings.push(
+        `El total del comprobante ($${receiptAmount.toLocaleString(
+          "es-CO",
+        )}) no coincide con los productos seleccionados ($${plan.total.toLocaleString(
+          "es-CO",
+        )}). Revisa precios o cantidades.`,
+      );
+    }
+    const initialWarningsCount = warnings.length;
 
     // 7. Agrupar cantidades por producto. La disponibilidad NO se decide aquí:
     //    se comprueba al descontar, dentro de la transacción y con la fila
@@ -375,7 +464,7 @@ export async function createPublicLead(request, reply) {
 
     // Las advertencias de stock se conocen después de insertar la venta; se
     // actualiza `notes` para que el operador las vea en el panel.
-    if (warnings.length > plan.warnings.length) {
+    if (warnings.length > initialWarningsCount) {
       await connection.query(
         "UPDATE sales SET notes = ? WHERE id = ? AND organization_id = ?",
         [buildNotes(warnings), saleId, organizationId],

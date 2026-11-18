@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -45,6 +45,7 @@ function formatDateTime(value) {
 export function PublicFormPage() {
   const [paymentMethod, setPaymentMethod] = useState('online');
   const [proofFile, setProofFile] = useState(null);
+  const [quantities, setQuantities] = useState({});
   const [acceptsPolicy, setAcceptsPolicy] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -55,6 +56,35 @@ export function PublicFormPage() {
     error: productsError,
     status: stockStatus,
   } = usePublicProducts();
+
+  const selectedItems = useMemo(
+    () =>
+      products
+        .map((product) => ({
+          ...product,
+          quantity: Number(quantities[product.id]) || 0,
+        }))
+        .filter((product) => product.quantity > 0),
+    [products, quantities],
+  );
+
+  const selectedTotal = useMemo(
+    () =>
+      selectedItems.reduce(
+        (sum, item) => sum + Number(item.current_price) * item.quantity,
+        0,
+      ),
+    [selectedItems],
+  );
+
+  const setQuantity = (productId, rawValue, max) => {
+    const value =
+      rawValue === ''
+        ? ''
+        : Math.max(0, Math.min(Number(rawValue), Number(max)));
+    setQuantities((prev) => ({ ...prev, [productId]: value }));
+    setErrors((prev) => ({ ...prev, items: '', general: '' }));
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -70,6 +100,17 @@ export function PublicFormPage() {
     if (!acceptsPolicy) {
       newErrors.accepts_policy =
         'Debe aceptar la política de privacidad para continuar';
+    }
+
+    if (selectedItems.length === 0) {
+      newErrors.items = 'Selecciona al menos un producto con su cantidad';
+    }
+
+    for (const item of selectedItems) {
+      if (item.quantity > Number(item.current_stock)) {
+        newErrors.items = `La cantidad de ${item.name} supera el stock disponible (${item.current_stock}).`;
+        break;
+      }
     }
 
     setErrors(newErrors);
@@ -113,6 +154,15 @@ export function PublicFormPage() {
       const formData = new FormData();
       formData.append('payment_mode', 'online');
       formData.append('accepts_policy', String(acceptsPolicy));
+      formData.append(
+        'items',
+        JSON.stringify(
+          selectedItems.map((item) => ({
+            product_id: item.id,
+            quantity: item.quantity,
+          })),
+        ),
+      );
       formData.append('proof_file', proofFile);
 
       const response = await api.post('/public/leads', formData, {
@@ -239,7 +289,9 @@ export function PublicFormPage() {
                     key={`${item.description}-${index}`}
                     className="flex justify-between gap-3"
                   >
-                    <span>{item.description}</span>
+                    <span>
+                      {item.quantity} × {item.description}
+                    </span>
                     <span className="font-medium text-unal-secondary">
                       {formatCurrency(item.total)}
                     </span>
@@ -282,7 +334,7 @@ export function PublicFormPage() {
             <p className="text-unal-secondary-light mt-2">
               {paymentMethod === 'efectivo'
                 ? 'Pagaste en efectivo en la caja de la Universidad. Registra tu recibo y los productos para que un administrador valide la compra.'
-                : 'Ya compraste en la página de la Universidad Nacional. Sube el comprobante en PDF y nosotros registramos la venta con tus datos.'}
+                : 'Ya compraste en la página de la Universidad Nacional. Sube el comprobante en PDF, elige los productos que pagaste y nosotros registramos la venta.'}
             </p>
           </div>
 
@@ -327,7 +379,7 @@ export function PublicFormPage() {
                     Pago virtual (en línea)
                   </span>
                   <span className="block text-sm text-unal-secondary-light mt-1">
-                    Pagaste en la página de la UNAL. Solo necesitas el PDF.
+                    Pagaste en la página de la UNAL. Sube el PDF y elige tus productos.
                   </span>
                 </button>
 
@@ -422,8 +474,8 @@ export function PublicFormPage() {
               </div>
               <div className="p-4">
                 <p className="text-xs text-unal-secondary-light mb-3">
-                  La compra se realiza en la página de la UNAL. Esta lista es
-                  informativa y muestra la cantidad disponible hoy en la granja.
+                  Selecciona los productos y cantidades que aparecen en tu
+                  comprobante. Los precios se toman del catálogo vigente.
                 </p>
 
                 {loadingProducts ? (
@@ -439,29 +491,73 @@ export function PublicFormPage() {
                     No hay productos disponibles en este momento.
                   </p>
                 ) : (
-                  <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {products.map((product) => (
-                      <li
-                        key={product.id}
-                        className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-white"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium text-unal-secondary truncate">
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-unal-secondary-light">
-                            {formatCurrency(product.current_price)} /{' '}
-                            {product.unit} · {product.category}
-                          </p>
-                        </div>
-                        <span className="badge badge-success whitespace-nowrap">
-                          {product.current_stock} {product.unit}(s)
-                        </span>
-                      </li>
-                    ))}
+                  <ul className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                    {products.map((product) => {
+                      const quantity = Number(quantities[product.id]) || 0;
+                      return (
+                        <li
+                          key={product.id}
+                          className="flex flex-col gap-3 p-3 rounded-lg border border-gray-100 bg-white sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-unal-secondary truncate">
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-unal-secondary-light">
+                              {formatCurrency(product.current_price)} /{' '}
+                              {product.unit} · Stock {product.current_stock}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <label
+                              htmlFor={`quantity-${product.id}`}
+                              className="text-xs text-unal-secondary-light"
+                            >
+                              Cantidad
+                            </label>
+                            <input
+                              id={`quantity-${product.id}`}
+                              type="number"
+                              min="0"
+                              max={product.current_stock}
+                              step="1"
+                              value={quantities[product.id] ?? ''}
+                              onChange={(event) =>
+                                setQuantity(
+                                  product.id,
+                                  event.target.value,
+                                  product.current_stock,
+                                )
+                              }
+                              className="input-field w-24 text-center"
+                            />
+                            <span className="min-w-[5.5rem] text-right text-sm font-medium text-unal-secondary">
+                              {formatCurrency(
+                                Number(product.current_price) * quantity,
+                              )}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
+
+                {errors.items && (
+                  <p className="mt-3 text-sm text-red-500" role="alert">
+                    {errors.items}
+                  </p>
+                )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-xl border border-gray-200 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-unal-secondary-light">
+                Total de productos seleccionados
+              </span>
+              <span className="text-lg font-bold text-unal-primary">
+                {formatCurrency(selectedTotal)}
+              </span>
             </div>
 
             <div className="space-y-2">
@@ -489,8 +585,8 @@ export function PublicFormPage() {
               </h3>
               <p className="text-sm text-unal-secondary-light">
                 Tipo y número de documento, nombre completo, teléfono, correo,
-                fecha de compra y las descripciones pagadas. No tienes que
-                escribir estos datos otra vez.
+                fecha de compra y valor pagado. Los productos los eliges tú
+                arriba, así que la venta queda con las cantidades correctas.
               </p>
             </div>
 

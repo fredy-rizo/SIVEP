@@ -48,7 +48,7 @@ export function matMul(A, B) {
   const colsB = B[0].length;
   // Validación dimensional: el producto solo existe si colsA === rowsB.
   if (colsA !== rowsB) {
-    throw new Error('Dimensiones incompatibles para multiplicar matrices');
+    throw new Error("Dimensiones incompatibles para multiplicar matrices");
   }
   // Se inicializa la matriz resultado llena de ceros.
   const C = Array.from({ length: rowsA }, () => Array(colsB).fill(0));
@@ -88,7 +88,7 @@ export function matVec(A, v) {
 export function inverse(A) {
   const n = A.length;
   if (!A.every((row) => row.length === n)) {
-    throw new Error('Solo se puede invertir una matriz cuadrada');
+    throw new Error("Solo se puede invertir una matriz cuadrada");
   }
   // Se construye la matriz aumentada [A | I] clonando A para no mutarla.
   const M = A.map((row, i) => [
@@ -110,7 +110,7 @@ export function inverse(A) {
     // Si el pivote es (casi) cero, la matriz es singular: no tiene inversa
     // (en nuestro caso no ocurre con días distintos, pero se valida).
     if (Math.abs(pivotVal) < 1e-12) {
-      throw new Error('Matriz singular: no tiene inversa');
+      throw new Error("Matriz singular: no tiene inversa");
     }
     // NORMALIZAR: dividir toda la fila por el pivote para que valga 1.
     for (let j = 0; j < 2 * n; j++) M[col][j] /= pivotVal;
@@ -158,7 +158,7 @@ export function solve(A, b) {
 export function leastSquares(yValues) {
   const n = yValues.length;
   if (n < 2) {
-    throw new Error('Se necesitan al menos 2 datos para ajustar la recta');
+    throw new Error("Se necesitan al menos 2 datos para ajustar la recta");
   }
   // Eje x: días numerados 1..n (vector columna junto a la columna de unos).
   const xValues = yValues.map((_, i) => i + 1);

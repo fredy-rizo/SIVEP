@@ -128,6 +128,21 @@ export const publicLeadSchema = Joi.object({
     "any.only": "Debe aceptar la política de privacidad para continuar",
     "any.required": "Debe aceptar la política de privacidad para continuar",
   }),
+  // Productos que el comprador selecciona en el formulario. Los precios NO se
+  // aceptan del cliente: el controlador los toma del catálogo y calcula totales.
+  items: Joi.array()
+    .items(
+      Joi.object({
+        product_id: Joi.number().integer().positive().required(),
+        quantity: Joi.number().integer().positive().max(1000).required(),
+      }),
+    )
+    .min(1)
+    .required()
+    .messages({
+      "array.min": "Debes seleccionar al menos un producto",
+      "any.required": "Debes seleccionar al menos un producto",
+    }),
 });
 
 // Solicitud de compra en efectivo. A diferencia de `publicLeadSchema`, aquí el

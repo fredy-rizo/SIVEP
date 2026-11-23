@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "db:migrate": "node src/database/migrate.js",
     "db:seed": "node src/database/seed.js",
+    "db:seed-demo": "node src/database/seed-demo-sales.js",
     "db:add-notes": "node src/database/add-notes-column.js",
     "db:add-pickup": "node src/database/add-pickup-columns.js",
     "db:add-ti": "node src/database/add-document-ti.js",

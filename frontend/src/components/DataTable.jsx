@@ -1,5 +1,43 @@
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+
+// Construye la lista de botones de página al estilo de Google: primera,
+// última, la actual con sus vecinas, y puntos suspensivos donde hay saltos.
+function buildPageItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages = new Set([
+    1,
+    totalPages,
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+  ]);
+
+  if (currentPage <= 3) {
+    [2, 3, 4].forEach((page) => pages.add(page));
+  }
+  if (currentPage >= totalPages - 2) {
+    [totalPages - 3, totalPages - 2, totalPages - 1].forEach((page) =>
+      pages.add(page),
+    );
+  }
+
+  const sorted = [...pages]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const items = [];
+  let previous = 0;
+  for (const page of sorted) {
+    if (previous && page - previous > 1) items.push(`gap-${page}`);
+    items.push(page);
+    previous = page;
+  }
+  return items;
+}
 
 export function DataTable({ 
   columns, 
@@ -48,6 +86,11 @@ export function DataTable({
   const totalPages = serverPaginated
     ? Math.max(1, Number(controlledTotalPages) || 0)
     : Math.ceil(totalRows / pageSize);
+
+  const pageItems = useMemo(
+    () => buildPageItems(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
 
   // Si el servidor devuelve menos páginas (por un filtro), se vuelve a la
   // última página válida en lugar de quedar en una página vacía.
@@ -146,25 +189,58 @@ export function DataTable({
             Mostrando {Math.min((currentPage - 1) * pageSize + 1, totalRows)} a{' '}
             {Math.min(currentPage * pageSize, totalRows)} de {totalRows}
           </p>
-          <div className="flex gap-2 items-center justify-center">
+
+          <nav
+            aria-label="Paginación"
+            className="flex flex-wrap items-center justify-center gap-1"
+          >
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="p-2 rounded-lg border border-gray-300 text-unal-secondary hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Página anterior"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-unal-secondary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <ChevronUp className="w-5 h-5 rotate-180" strokeWidth={2.5} />
+              <ChevronLeft className="w-4 h-4" strokeWidth={2.5} />
             </button>
-            <span className="flex items-center px-3 text-sm text-unal-secondary">
-              Página {currentPage} de {totalPages}
-            </span>
+
+            {pageItems.map((item) =>
+              typeof item === 'number' ? (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => handlePageChange(item)}
+                  aria-label={`Ir a la página ${item}`}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  className={`flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors ${
+                    item === currentPage
+                      ? 'border-unal-primary bg-unal-primary text-white'
+                      : 'border-gray-300 text-unal-secondary hover:bg-gray-100'
+                  }`}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span
+                  key={item}
+                  className="flex h-9 w-6 items-center justify-center text-sm text-unal-secondary-light"
+                  aria-hidden="true"
+                >
+                  …
+                </span>
+              ),
+            )}
+
             <button
+              type="button"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-lg border border-gray-300 text-unal-secondary hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Página siguiente"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-unal-secondary transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <ChevronDown className="w-5 h-5" strokeWidth={2.5} />
+              <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
             </button>
-          </div>
+          </nav>
         </div>
       )}
     </div>

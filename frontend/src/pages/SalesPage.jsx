@@ -259,7 +259,7 @@ export function SalesPage() {
                 <CheckCircle className="w-4 h-4" />
               </button>
             )}
-            {row.customer_proof_url && (
+            {(row.proof_url || row.customer_proof_url) && (
               <button
                 onClick={() => handleViewProof(row)}
                 className="p-2 text-unal-accent hover:bg-unal-accent/10 rounded-lg transition-colors"
@@ -369,9 +369,9 @@ export function SalesPage() {
         title={`Comprobante de pago - ${selectedSale?.invoice_number || ''}`}
         size="lg"
       >
-        {selectedSale?.customer_proof_url ? (
+        {selectedSale?.proof_url || selectedSale?.customer_proof_url ? (
           <ProofViewer
-            url={selectedSale.customer_proof_url}
+            url={selectedSale.proof_url || selectedSale.customer_proof_url}
             customerName={selectedSale.customer_name}
             customerDocument={selectedSale.customer_document}
           />

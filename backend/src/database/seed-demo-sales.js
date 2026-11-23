@@ -546,7 +546,7 @@ async function run() {
              (organization_id, invoice_number, customer_id, sale_date, subtotal,
               tax, total, payment_type, payment_status, payment_mode,
               cash_receipt_code, paid_at, pickup_code, pickup_status,
-              created_by, notes)
+              created_by, notes, proof_url)
            VALUES ?`,
           [
             chunk.map((s) => [
@@ -566,6 +566,7 @@ async function run() {
               s.pickup_status,
               s.created_by,
               s.notes,
+              `sivep-demo://sale/${s.invoice_number}`,
             ]),
           ],
         );

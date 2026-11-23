@@ -3,10 +3,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool from '../config/database.js';
 import { pdfFromJpegs } from '../utils/pdfFromJpegs.js';
+import { saleReceiptPdf } from '../utils/saleReceiptPdf.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 const MAX_PDF_PAGES = 30;
+
+// Las ventas de demostración guardan una URL interna en `sales.proof_url`.
+// No hay archivo: el comprobante se arma al vuelo con los datos de la venta.
+const DEMO_RECEIPT_PREFIX = 'sivep-demo://sale/';
 
 // Verifica que la URL pertenezca a un comprobante de la organización del
 // usuario. Evita que un usuario autenticado pueda pedir cualquier archivo.
@@ -17,10 +22,55 @@ async function proofBelongsToOrganization(url, organizationId) {
      UNION
      SELECT 1 FROM cash_purchase_claims
        WHERE receipt_url = ? AND organization_id = ?
+     UNION
+     SELECT 1 FROM sales
+       WHERE proof_url = ? AND organization_id = ?
      LIMIT 1`,
-    [url, organizationId, url, organizationId],
+    [url, organizationId, url, organizationId, url, organizationId],
   );
   return rows.length > 0;
+}
+
+// Comprobante de demostración: se reconstruye desde la venta y su cliente.
+async function demoReceiptPdf(url, organizationId) {
+  const invoiceNumber = decodeURIComponent(url.slice(DEMO_RECEIPT_PREFIX.length));
+  const [rows] = await pool.query(
+    `SELECT s.*, c.full_name, c.document_type, c.document_number, c.email,
+            c.phone, c.address, o.name AS organization_name
+       FROM sales s
+       JOIN customers c ON c.id = s.customer_id
+       JOIN organizations o ON o.id = s.organization_id
+      WHERE s.invoice_number = ? AND s.organization_id = ? AND s.proof_url = ?`,
+    [invoiceNumber, organizationId, url],
+  );
+  if (rows.length === 0) return null;
+
+  const sale = rows[0];
+  const [items] = await pool.query(
+    `SELECT si.description, si.quantity, si.unit_price, si.total,
+            p.name AS product_name
+       FROM sale_items si
+       LEFT JOIN products p ON p.id = si.product_id
+      WHERE si.sale_id = ?
+      ORDER BY si.id`,
+    [sale.id],
+  );
+
+  return saleReceiptPdf({
+    sale,
+    customer: {
+      full_name: sale.full_name,
+      document_type: sale.document_type,
+      document_number: sale.document_number,
+      email: sale.email,
+      phone: sale.phone,
+    },
+    items: items.map((item) => ({
+      ...item,
+      description: item.product_name || item.description || "Producto",
+    })),
+    organizationName: sale.organization_name,
+  });
 }
 
 function cloudinaryPageUrl(url, page) {
@@ -70,6 +120,16 @@ export async function getProofFile(request, reply) {
   const url = String(request.query?.url || '').trim();
   if (!url) {
     return reply.code(400).send({ error: 'Falta la URL del comprobante' });
+  }
+
+  // Comprobante de demostración generado desde la venta (sin archivo).
+  if (url.startsWith(DEMO_RECEIPT_PREFIX)) {
+    const pdf = await demoReceiptPdf(url, request.organizationId);
+    if (!pdf) {
+      return reply.code(404).send({ error: 'Comprobante no encontrado' });
+    }
+    const invoice = url.slice(DEMO_RECEIPT_PREFIX.length);
+    return sendPdf(reply, pdf, `${decodeURIComponent(invoice)}.pdf`);
   }
 
   const allowed = await proofBelongsToOrganization(url, request.organizationId);

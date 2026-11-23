@@ -71,7 +71,10 @@ function PdfViewer({ url, title }) {
 export function ProofViewer({ url, customerName, customerDocument }) {
   const [failed, setFailed] = useState(false);
   const fullUrl = resolveFileUrl(url);
-  const isPdf = (url || '').toLowerCase().split('?')[0].endsWith('.pdf');
+  // Los comprobantes de demostración (sivep-demo://) los arma el backend como
+  // PDF, igual que los PDF de Cloudinary.
+  const cleanUrl = (url || '').toLowerCase().split('?')[0];
+  const isPdf = cleanUrl.endsWith('.pdf') || cleanUrl.startsWith('sivep-demo://');
 
   return (
     <div className="text-center">

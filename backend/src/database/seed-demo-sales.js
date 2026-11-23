@@ -43,7 +43,7 @@ function makeRandom(seed) {
   };
 }
 
-const rand = makeRandom(20261123);
+const rand = makeRandom(Number(process.env.DEMO_SEED || 20261123));
 const randInt = (min, max) => Math.floor(rand() * (max - min + 1)) + min;
 const pick = (list) => list[Math.floor(rand() * list.length)];
 const roundMoney = (v) => Math.round(Number(v) * 100) / 100;

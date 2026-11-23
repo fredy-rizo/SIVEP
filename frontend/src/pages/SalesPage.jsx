@@ -239,6 +239,7 @@ export function SalesPage() {
         onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
         totalPages={pagination.totalPages}
         currentPage={pagination.page}
+        totalItems={pagination.total}
         emptyMessage="No se encontraron ventas"
         renderActions={(row) => (
           <div className="flex items-center justify-end gap-1">

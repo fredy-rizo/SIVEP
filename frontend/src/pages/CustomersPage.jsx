@@ -111,6 +111,10 @@ export function CustomersPage() {
         keyField="id"
         pagination={true}
         pageSize={pagination.limit}
+        onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+        totalPages={pagination.totalPages}
+        currentPage={pagination.page}
+        totalItems={pagination.total}
         emptyMessage="No se encontraron clientes"
         onRowClick={(row) => openDetail(row)}
       />

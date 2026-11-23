@@ -1,5 +1,5 @@
 import { ChevronUp, ChevronDown } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export function DataTable({ 
   columns, 
@@ -11,10 +11,19 @@ export function DataTable({
   pageSize = 10,
   emptyMessage = 'No hay datos disponibles',
   renderActions,
-  className = ''
+  className = '',
+  // Paginación del servidor: cuando llega `onPageChange`, la tabla NO corta
+  // los datos (ya vienen paginados) y los controles los maneja el padre.
+  currentPage: controlledPage,
+  totalPages: controlledTotalPages,
+  totalItems,
+  onPageChange,
 }) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [currentPage, setCurrentPage] = useState(1);
+  const [internalPage, setInternalPage] = useState(1);
+
+  const serverPaginated = typeof onPageChange === 'function';
+  const currentPage = serverPaginated ? controlledPage || 1 : internalPage;
 
   const sortedData = useMemo(() => {
     if (!sortable || !sortConfig.key) return data;
@@ -28,12 +37,25 @@ export function DataTable({
   }, [data, sortConfig]);
 
   const paginatedData = useMemo(() => {
-    if (!pagination) return sortedData;
+    if (!pagination || serverPaginated) return sortedData;
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
-  }, [sortedData, pagination, currentPage, pageSize]);
+  }, [sortedData, pagination, serverPaginated, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(sortedData.length / pageSize);
+  const totalRows = serverPaginated
+    ? Number(totalItems) || 0
+    : sortedData.length;
+  const totalPages = serverPaginated
+    ? Math.max(1, Number(controlledTotalPages) || 0)
+    : Math.ceil(totalRows / pageSize);
+
+  // Si el servidor devuelve menos páginas (por un filtro), se vuelve a la
+  // última página válida en lugar de quedar en una página vacía.
+  useEffect(() => {
+    if (serverPaginated && totalRows > 0 && currentPage > totalPages) {
+      onPageChange(totalPages);
+    }
+  }, [serverPaginated, totalRows, currentPage, totalPages, onPageChange]);
 
   const handleSort = (key) => {
     if (!sortable) return;
@@ -44,7 +66,12 @@ export function DataTable({
   };
 
   const handlePageChange = (page) => {
-    setCurrentPage(page);
+    if (serverPaginated) {
+      if (page < 1 || page > totalPages || page === currentPage) return;
+      onPageChange(page);
+      return;
+    }
+    setInternalPage(page);
   };
 
   return (
@@ -116,7 +143,8 @@ export function DataTable({
       {pagination && totalPages > 1 && (
         <div className="px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-sm text-unal-secondary-light text-center sm:text-left">
-            Mostrando {(currentPage - 1) * pageSize + 1} a {Math.min(currentPage * pageSize, sortedData.length)} de {sortedData.length}
+            Mostrando {Math.min((currentPage - 1) * pageSize + 1, totalRows)} a{' '}
+            {Math.min(currentPage * pageSize, totalRows)} de {totalRows}
           </p>
           <div className="flex gap-2 items-center justify-center">
             <button

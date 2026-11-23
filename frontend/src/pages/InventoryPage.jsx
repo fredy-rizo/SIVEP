@@ -240,6 +240,7 @@ export function InventoryPage() {
             onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
             totalPages={pagination.totalPages}
             currentPage={pagination.page}
+            totalItems={pagination.total}
             emptyMessage="No se encontraron productos"
             renderActions={(row) => (
               <button
@@ -312,6 +313,7 @@ export function InventoryPage() {
             onPageChange={(page) => setMovementPagination(prev => ({ ...prev, page }))}
             totalPages={movementPagination.totalPages}
             currentPage={movementPagination.page}
+            totalItems={movementPagination.total}
             emptyMessage="No hay movimientos registrados"
           />
         </div>

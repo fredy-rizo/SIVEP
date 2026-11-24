@@ -6,7 +6,7 @@ import { BuyOnUnalButton } from "../components/BuyOnUnalButton";
 const products = [
   {
     name: "Huevos",
-    unit: "docena",
+    unit: "Cubeta",
     price: 12000,
     image:
       "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400&h=300&fit=crop",

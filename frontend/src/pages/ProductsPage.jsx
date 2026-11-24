@@ -1,35 +1,54 @@
-import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, AlertTriangle, Package, Upload, X } from 'lucide-react';
-import api from '../utils/api';
-import { formatCOP } from '../utils/formatters';
-import { DataTable } from '../components/DataTable';
-import { Modal } from '../components/Modal';
-import { Input, Select, FormError } from '../components/FormComponents';
-import toast from '../utils/toast';
+import { useState, useEffect } from "react";
+import {
+  Plus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  AlertTriangle,
+  Package,
+  Upload,
+  X,
+} from "lucide-react";
+import api from "../utils/api";
+import { formatCOP } from "../utils/formatters";
+import { DataTable } from "../components/DataTable";
+import { Modal } from "../components/Modal";
+import { Input, Select, FormError } from "../components/FormComponents";
+import toast from "../utils/toast";
 
-const CATEGORIES = ['Avícola', 'Piscícola', 'Apícola', 'Porcino', 'Otro'];
+const CATEGORIES = ["Avícola", "Piscícola", "Apícola", "Porcino", "Otro"];
 
 export function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
-  const [filters, setFilters] = useState({ search: '', category: '', low_stock: '' });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+  const [filters, setFilters] = useState({
+    search: "",
+    category: "",
+    low_stock: "",
+  });
   const [showFilters, setShowFilters] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    unit: '',
-    current_price: '',
-    current_stock: '',
-    min_stock: '',
-    category: '',
-    description: '',
-    image_url: '',
-    is_active: true
+    name: "",
+    unit: "",
+    current_price: "",
+    current_stock: "",
+    min_stock: "",
+    category: "",
+    description: "",
+    image_url: "",
+    is_active: true,
   });
   const [errors, setErrors] = useState({});
 
@@ -37,18 +56,20 @@ export function ProductsPage() {
     setLoading(true);
     try {
       const [productsRes, categoriesRes] = await Promise.all([
-        api.get(`/products?page=${pagination.page}&limit=${pagination.limit}&search=${filters.search}&category=${filters.category}&low_stock=${filters.low_stock}`),
-        api.get('/products/categories')
+        api.get(
+          `/products?page=${pagination.page}&limit=${pagination.limit}&search=${filters.search}&category=${filters.category}&low_stock=${filters.low_stock}`,
+        ),
+        api.get("/products/categories"),
       ]);
       setProducts(productsRes.data.data);
       setCategories(categoriesRes.data.categories);
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         total: productsRes.data.pagination.total,
-        totalPages: productsRes.data.pagination.totalPages
+        totalPages: productsRes.data.pagination.totalPages,
       }));
     } catch {
-      toast.error('Error', 'No se pudieron cargar los productos');
+      toast.error("Error", "No se pudieron cargar los productos");
     } finally {
       setLoading(false);
     }
@@ -60,27 +81,31 @@ export function ProductsPage() {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = 'El nombre es obligatorio';
-    if (!formData.unit.trim()) newErrors.unit = 'La unidad es obligatoria';
-    if (!formData.current_price || parseFloat(formData.current_price) < 0) newErrors.current_price = 'Precio inválido';
-    if (formData.current_stock === '' || parseInt(formData.current_stock) < 0) newErrors.current_stock = 'Stock inválido';
-    if (formData.min_stock === '' || parseInt(formData.min_stock) < 0) newErrors.min_stock = 'Stock mínimo inválido';
-    if (!formData.category.trim()) newErrors.category = 'La categoría es obligatoria';
+    if (!formData.name.trim()) newErrors.name = "El nombre es obligatorio";
+    if (!formData.unit.trim()) newErrors.unit = "La unidad es obligatoria";
+    if (!formData.current_price || parseFloat(formData.current_price) < 0)
+      newErrors.current_price = "Precio inválido";
+    if (formData.current_stock === "" || parseInt(formData.current_stock) < 0)
+      newErrors.current_stock = "Stock inválido";
+    if (formData.min_stock === "" || parseInt(formData.min_stock) < 0)
+      newErrors.min_stock = "Stock mínimo inválido";
+    if (!formData.category.trim())
+      newErrors.category = "La categoría es obligatoria";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const resetForm = () => {
     setFormData({
-      name: '',
-      unit: '',
-      current_price: '',
-      current_stock: '0',
-      min_stock: '0',
-      category: '',
-      description: '',
-      image_url: '',
-      is_active: true
+      name: "",
+      unit: "",
+      current_price: "",
+      current_stock: "0",
+      min_stock: "0",
+      category: "",
+      description: "",
+      image_url: "",
+      is_active: true,
     });
     setErrors({});
     setEditingProduct(null);
@@ -98,11 +123,11 @@ export function ProductsPage() {
         current_stock: product.current_stock,
         min_stock: product.min_stock,
         category: product.category,
-        description: product.description || '',
-        image_url: product.image_url || '',
+        description: product.description || "",
+        image_url: product.image_url || "",
         // MySQL devuelve 1/0 y Joi solo acepta booleanos: se normaliza aquí
         // para que guardar sin tocar la casilla no falle la validación.
-        is_active: !!product.is_active
+        is_active: !!product.is_active,
       });
     }
     setModalOpen(true);
@@ -112,30 +137,33 @@ export function ProductsPage() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    const validTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
     if (!validTypes.includes(file.type)) {
-      toast.error('Formato no válido', 'Use JPG, PNG o WEBP');
+      toast.error("Formato no válido", "Use JPG, PNG o WEBP");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('Archivo muy grande', 'La imagen no debe superar 10MB');
+      toast.error("Archivo muy grande", "La imagen no debe superar 10MB");
       return;
     }
 
     setUploadingImage(true);
     try {
       const imageData = new FormData();
-      imageData.append('image', file);
-      const response = await api.post('/products/upload-image', imageData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      imageData.append("image", file);
+      const response = await api.post("/products/upload-image", imageData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      setFormData(prev => ({ ...prev, image_url: response.data.image_url }));
-      toast.success('Imagen subida', 'La imagen se guardó en Cloudinary');
+      setFormData((prev) => ({ ...prev, image_url: response.data.image_url }));
+      toast.success("Imagen subida", "La imagen se guardó en Cloudinary");
     } catch (error) {
-      toast.error('Error', error.response?.data?.error || 'No se pudo subir la imagen');
+      toast.error(
+        "Error",
+        error.response?.data?.error || "No se pudo subir la imagen",
+      );
     } finally {
       setUploadingImage(false);
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
@@ -154,20 +182,20 @@ export function ProductsPage() {
         category: formData.category,
         description: formData.description || null,
         image_url: formData.image_url || null,
-        is_active: formData.is_active
+        is_active: formData.is_active,
       };
 
       if (editingProduct) {
         await api.put(`/products/${editingProduct.id}`, data);
-        toast.success('Producto actualizado');
+        toast.success("Producto actualizado");
       } else {
-        await api.post('/products', data);
-        toast.success('Producto creado');
+        await api.post("/products", data);
+        toast.success("Producto creado");
       }
       setModalOpen(false);
       fetchData();
     } catch (error) {
-      toast.error('Error', error.response?.data?.error || 'No se pudo guardar');
+      toast.error("Error", error.response?.data?.error || "No se pudo guardar");
     } finally {
       setSubmitting(false);
     }
@@ -177,27 +205,55 @@ export function ProductsPage() {
     if (!window.confirm(`¿Desactivar el producto "${product.name}"?`)) return;
     try {
       await api.delete(`/products/${product.id}`);
-      toast.success('Producto desactivado');
+      toast.success("Producto desactivado");
       fetchData();
     } catch {
-      toast.error('Error', 'No se pudo desactivar');
+      toast.error("Error", "No se pudo desactivar");
     }
   };
 
   const columns = [
-    { key: 'name', label: 'Producto', sortable: true },
-    { key: 'unit', label: 'Unidad' },
-    { key: 'category', label: 'Categoría', render: (v) => <span className="badge badge-gray">{v}</span> },
-    { key: 'current_price', label: 'Precio', render: (v) => formatCOP(v), sortable: true },
-    { key: 'current_stock', label: 'Stock', render: (v, row) => (
-      <span className={v <= row.min_stock && v > 0 ? 'text-yellow-600 font-medium' : v === 0 ? 'text-red-600 font-medium' : ''}>
-        {v} {row.unit}
-      </span>
-    ), sortable: true },
-    { key: 'min_stock', label: 'Stock Mín' },
-    { key: 'is_active', label: 'Estado', render: (v) => (
-      <span className={`badge ${v ? 'badge-success' : 'badge-gray'}`}>{v ? 'Activo' : 'Inactivo'}</span>
-    )}
+    { key: "name", label: "Producto", sortable: true },
+    { key: "unit", label: "Unidad" },
+    {
+      key: "category",
+      label: "Categoría",
+      render: (v) => <span className="badge badge-gray">{v}</span>,
+    },
+    {
+      key: "current_price",
+      label: "Precio",
+      render: (v) => formatCOP(v),
+      sortable: true,
+    },
+    {
+      key: "current_stock",
+      label: "Stock",
+      render: (v, row) => (
+        <span
+          className={
+            v <= row.min_stock && v > 0
+              ? "text-yellow-600 font-medium"
+              : v === 0
+                ? "text-red-600 font-medium"
+                : ""
+          }
+        >
+          {v} {row.unit}
+        </span>
+      ),
+      sortable: true,
+    },
+    { key: "min_stock", label: "Stock Mín" },
+    {
+      key: "is_active",
+      label: "Estado",
+      render: (v) => (
+        <span className={`badge ${v ? "badge-success" : "badge-gray"}`}>
+          {v ? "Activo" : "Inactivo"}
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -205,10 +261,15 @@ export function ProductsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-unal-secondary">Productos</h1>
-          <p className="text-unal-secondary-light">Catálogo de productos de la Granja El Cairo</p>
+          <p className="text-unal-secondary-light">
+            Catálogo de productos de la Granja El Cairo
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" onClick={() => setShowFilters(!showFilters)}>
+          <button
+            className="btn-secondary"
+            onClick={() => setShowFilters(!showFilters)}
+          >
             <Filter className="w-4 h-4 mr-2" /> Filtros
           </button>
           <button className="btn-primary" onClick={() => openModal()}>
@@ -224,23 +285,41 @@ export function ProductsPage() {
               label="Buscar"
               placeholder="Nombre, descripción..."
               value={filters.search}
-              onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setPagination(prev => ({ ...prev, page: 1 })); }}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, search: e.target.value }));
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
             />
             <Select
               label="Categoría"
               value={filters.category}
-              onChange={(e) => { setFilters(prev => ({ ...prev, category: e.target.value })); setPagination(prev => ({ ...prev, page: 1 })); }}
-              options={[{ value: '', label: 'Todas' }, ...categories.map(c => ({ value: c, label: c }))]}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, category: e.target.value }));
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+              options={[
+                { value: "", label: "Todas" },
+                ...categories.map((c) => ({ value: c, label: c })),
+              ]}
             />
             <Select
               label="Stock"
               value={filters.low_stock}
-              onChange={(e) => { setFilters(prev => ({ ...prev, low_stock: e.target.value })); setPagination(prev => ({ ...prev, page: 1 })); }}
-              options={[{ value: '', label: 'Todos' }, { value: 'true', label: 'Stock bajo' }]}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, low_stock: e.target.value }));
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+              options={[
+                { value: "", label: "Todos" },
+                { value: "true", label: "Stock bajo" },
+              ]}
             />
             <div className="flex items-end">
               <button
-                onClick={() => { setFilters({ search: '', category: '', low_stock: '' }); setPagination(prev => ({ ...prev, page: 1 })); }}
+                onClick={() => {
+                  setFilters({ search: "", category: "", low_stock: "" });
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
                 className="btn-outline w-full"
               >
                 Limpiar
@@ -257,7 +336,7 @@ export function ProductsPage() {
         loading={loading}
         pagination={true}
         pageSize={pagination.limit}
-        onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+        onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
         totalPages={pagination.totalPages}
         currentPage={pagination.page}
         totalItems={pagination.total}
@@ -295,7 +374,7 @@ export function ProductsPage() {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingProduct ? 'Editar producto' : 'Nuevo producto'}
+        title={editingProduct ? "Editar producto" : "Nuevo producto"}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -305,7 +384,9 @@ export function ProductsPage() {
               label="Nombre"
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
               error={errors.name}
               required
               placeholder="Ej: Huevos"
@@ -314,19 +395,23 @@ export function ProductsPage() {
               label="Categoría"
               id="category"
               value={formData.category}
-              onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, category: e.target.value }))
+              }
               error={errors.category}
               required
-              options={CATEGORIES.map(c => ({ value: c, label: c }))}
+              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
             />
             <Input
               label="Unidad"
               id="unit"
               value={formData.unit}
-              onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, unit: e.target.value }))
+              }
               error={errors.unit}
               required
-              placeholder="Ej: docena, kilogramo, unidad, litro"
+              placeholder="Ej: cubeta, kilogramo, unidad, litro"
             />
             <Input
               label="Precio actual (COP)"
@@ -335,7 +420,12 @@ export function ProductsPage() {
               step="0.01"
               min="0"
               value={formData.current_price}
-              onChange={(e) => setFormData(prev => ({ ...prev, current_price: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  current_price: e.target.value,
+                }))
+              }
               error={errors.current_price}
               required
             />
@@ -345,7 +435,12 @@ export function ProductsPage() {
               type="number"
               min="0"
               value={formData.current_stock}
-              onChange={(e) => setFormData(prev => ({ ...prev, current_stock: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  current_stock: e.target.value,
+                }))
+              }
               error={errors.current_stock}
               required
             />
@@ -355,7 +450,9 @@ export function ProductsPage() {
               type="number"
               min="0"
               value={formData.min_stock}
-              onChange={(e) => setFormData(prev => ({ ...prev, min_stock: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, min_stock: e.target.value }))
+              }
               error={errors.min_stock}
               required
             />
@@ -366,7 +463,12 @@ export function ProductsPage() {
                 rows={3}
                 className="input-field"
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
                 placeholder="Descripción opcional del producto..."
               />
             </div>
@@ -381,7 +483,9 @@ export function ProductsPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                    onClick={() =>
+                      setFormData((prev) => ({ ...prev, image_url: "" }))
+                    }
                     className="absolute -top-2 -right-2 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
                     title="Quitar imagen"
                   >
@@ -393,22 +497,39 @@ export function ProductsPage() {
                 htmlFor="product_image_file"
                 className={`flex items-center justify-center gap-2 w-full px-4 py-2 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
                   uploadingImage
-                    ? 'border-gray-300 bg-gray-50 text-unal-secondary-light cursor-wait'
-                    : 'border-gray-300 hover:border-unal-primary hover:bg-gray-50 text-unal-secondary'
+                    ? "border-gray-300 bg-gray-50 text-unal-secondary-light cursor-wait"
+                    : "border-gray-300 hover:border-unal-primary hover:bg-gray-50 text-unal-secondary"
                 }`}
               >
                 {uploadingImage ? (
                   <>
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <svg
+                      className="animate-spin h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Subiendo imagen...
                   </>
                 ) : (
                   <>
                     <Upload className="w-5 h-5" />
-                    {formData.image_url ? 'Cambiar imagen (se sube a Cloudinary)' : 'Subir imagen (se guarda en Cloudinary)'}
+                    {formData.image_url
+                      ? "Cambiar imagen (se sube a Cloudinary)"
+                      : "Subir imagen (se guarda en Cloudinary)"}
                   </>
                 )}
               </label>
@@ -420,13 +541,20 @@ export function ProductsPage() {
                 disabled={uploadingImage}
                 className="hidden"
               />
-              <p className="mt-2 text-xs text-unal-secondary-light">JPG, PNG o WEBP • Máx. 10MB. O pega una URL manualmente:</p>
+              <p className="mt-2 text-xs text-unal-secondary-light">
+                JPG, PNG o WEBP • Máx. 10MB. O pega una URL manualmente:
+              </p>
               <input
                 id="image_url"
                 type="url"
                 className="input-field mt-1"
                 value={formData.image_url}
-                onChange={(e) => setFormData(prev => ({ ...prev, image_url: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    image_url: e.target.value,
+                  }))
+                }
                 placeholder="https://ejemplo.com/imagen.jpg"
               />
             </div>
@@ -436,16 +564,31 @@ export function ProductsPage() {
               <input
                 type="checkbox"
                 checked={formData.is_active}
-                onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    is_active: e.target.checked,
+                  }))
+                }
                 className="w-4 h-4 text-unal-primary border-gray-300 rounded focus:ring-unal-primary"
               />
               <span className="text-sm text-unal-secondary">Activo</span>
             </label>
           </div>
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
-            <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary">Cancelar</button>
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="btn-secondary"
+            >
+              Cancelar
+            </button>
             <button type="submit" disabled={submitting} className="btn-primary">
-              {submitting ? 'Guardando...' : (editingProduct ? 'Actualizar' : 'Crear')}
+              {submitting
+                ? "Guardando..."
+                : editingProduct
+                  ? "Actualizar"
+                  : "Crear"}
             </button>
           </div>
         </form>

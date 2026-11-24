@@ -52,7 +52,7 @@ test("encuentra el producto por nombre exacto", () => {
 
 test("encuentra el producto cuando el nombre está dentro de la descripción", () => {
   const match = findProductForItem(
-    { description: "Docena de huevos campesinos", total: 12000 },
+    { description: "Cubeta de huevos campesinos", total: 12000 },
     products,
   );
   assert.equal(match.product?.id, 1);

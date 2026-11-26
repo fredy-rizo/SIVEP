@@ -216,21 +216,127 @@ export const billingMigrations = [
 //    diferenciador del plan Profesional.
 // ---------------------------------------------------------------------------
 export const featureCatalog = [
-  { code: "core.inventory", name: "Gestión de inventario", category: "Operación", kind: "boolean", description: "Stock, movimientos e historial", sort_order: 10 },
-  { code: "core.sales", name: "Ventas", category: "Operación", kind: "boolean", description: "Registro de ventas y facturación", sort_order: 11 },
-  { code: "core.customers", name: "Clientes", category: "Operación", kind: "boolean", description: "Gestión de clientes y comprobantes", sort_order: 12 },
-  { code: "core.products", name: "Productos", category: "Operación", kind: "boolean", description: "Catálogo de productos", sort_order: 13 },
-  { code: "reports.basic", name: "Reportes básicos", category: "Reportes", kind: "boolean", description: "Reportes de ventas, inventario y clientes con exportación CSV", sort_order: 20 },
-  { code: "reports.advanced", name: "Reportes avanzados", category: "Reportes", kind: "boolean", description: "Analítica avanzada y series de tiempo", sort_order: 21 },
-  { code: "analytics.algebra", name: "Proyecciones (Álgebra lineal)", category: "Analítica", kind: "boolean", description: "Pronóstico de ventas por mínimos cuadrados", sort_order: 30 },
-  { code: "analytics.calculus", name: "Ritmo y optimización (Cálculo diferencial)", category: "Analítica", kind: "boolean", description: "Velocidad/aceleración de ventas y pedido óptimo (EOQ)", sort_order: 31 },
-  { code: "public.form", name: "Formulario público personalizado", category: "Crecimiento", kind: "boolean", description: "Captación de pedidos desde la web", sort_order: 40 },
-  { code: "multisite", name: "Múltiples sedes", category: "Escala", kind: "boolean", description: "Varias granjas bajo una misma cuenta", sort_order: 50 },
-  { code: "api.access", name: "Acceso por API", category: "Integración", kind: "boolean", description: "Integración con sistemas externos", sort_order: 60 },
-  { code: "support.email", name: "Soporte por email", category: "Soporte", kind: "boolean", description: "Atención por correo", sort_order: 70 },
-  { code: "support.priority", name: "Soporte prioritario", category: "Soporte", kind: "boolean", description: "Atención preferencial", sort_order: 71 },
-  { code: "support.sla", name: "SLA garantizado", category: "Soporte", kind: "boolean", description: "Acuerdo de nivel de servicio", sort_order: 72 },
-  { code: "limit.users", name: "Usuarios incluidos", category: "Límites", kind: "limit", description: "Número máximo de usuarios activos (NULL = ilimitado)", sort_order: 90 },
+  {
+    code: "core.inventory",
+    name: "Gestión de inventario",
+    category: "Operación",
+    kind: "boolean",
+    description: "Stock, movimientos e historial",
+    sort_order: 10,
+  },
+  {
+    code: "core.sales",
+    name: "Ventas",
+    category: "Operación",
+    kind: "boolean",
+    description: "Registro de ventas y facturación",
+    sort_order: 11,
+  },
+  {
+    code: "core.customers",
+    name: "Clientes",
+    category: "Operación",
+    kind: "boolean",
+    description: "Gestión de clientes y comprobantes",
+    sort_order: 12,
+  },
+  {
+    code: "core.products",
+    name: "Productos",
+    category: "Operación",
+    kind: "boolean",
+    description: "Catálogo de productos",
+    sort_order: 13,
+  },
+  {
+    code: "reports.basic",
+    name: "Reportes básicos",
+    category: "Reportes",
+    kind: "boolean",
+    description:
+      "Reportes de ventas, inventario y clientes con exportación CSV",
+    sort_order: 20,
+  },
+  {
+    code: "reports.advanced",
+    name: "Reportes avanzados",
+    category: "Reportes",
+    kind: "boolean",
+    description: "Analítica avanzada y series de tiempo",
+    sort_order: 21,
+  },
+  {
+    code: "analytics.algebra",
+    name: "Proyecciones",
+    category: "Analítica",
+    kind: "boolean",
+    description: "Pronóstico de ventas por mínimos cuadrados",
+    sort_order: 30,
+  },
+  {
+    code: "analytics.calculus",
+    name: "Ritmo y optimización",
+    category: "Analítica",
+    kind: "boolean",
+    description: "Velocidad/aceleración de ventas y pedido óptimo (EOQ)",
+    sort_order: 31,
+  },
+  {
+    code: "public.form",
+    name: "Formulario público personalizado",
+    category: "Crecimiento",
+    kind: "boolean",
+    description: "Captación de pedidos desde la web",
+    sort_order: 40,
+  },
+  {
+    code: "multisite",
+    name: "Múltiples sedes",
+    category: "Escala",
+    kind: "boolean",
+    description: "Varias granjas bajo una misma cuenta",
+    sort_order: 50,
+  },
+  {
+    code: "api.access",
+    name: "Acceso por API",
+    category: "Integración",
+    kind: "boolean",
+    description: "Integración con sistemas externos",
+    sort_order: 60,
+  },
+  {
+    code: "support.email",
+    name: "Soporte por email",
+    category: "Soporte",
+    kind: "boolean",
+    description: "Atención por correo",
+    sort_order: 70,
+  },
+  {
+    code: "support.priority",
+    name: "Soporte prioritario",
+    category: "Soporte",
+    kind: "boolean",
+    description: "Atención preferencial",
+    sort_order: 71,
+  },
+  {
+    code: "support.sla",
+    name: "SLA garantizado",
+    category: "Soporte",
+    kind: "boolean",
+    description: "Acuerdo de nivel de servicio",
+    sort_order: 72,
+  },
+  {
+    code: "limit.users",
+    name: "Usuarios incluidos",
+    category: "Límites",
+    kind: "limit",
+    description: "Número máximo de usuarios activos (NULL = ilimitado)",
+    sort_order: 90,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -303,9 +409,28 @@ export const plansCatalog = [
 // 4) SERVICIOS DE VALOR AGREGADO (upselling).
 // ---------------------------------------------------------------------------
 export const servicesCatalog = [
-  { code: "implementation", name: "Implementación y capacitación", description: "Instalación en sitio, carga de inventario inicial y capacitación del personal", price: 800000, sort_order: 1 },
-  { code: "data-migration", name: "Migración de datos", description: "Importación de datos antiguos (Excel, papel) al sistema", price: 400000, sort_order: 2 },
-  { code: "custom-report", name: "Reporte personalizado", description: "Desarrollo de un reporte a la medida", price: 600000, sort_order: 3 },
+  {
+    code: "implementation",
+    name: "Implementación y capacitación",
+    description:
+      "Instalación en sitio, carga de inventario inicial y capacitación del personal",
+    price: 800000,
+    sort_order: 1,
+  },
+  {
+    code: "data-migration",
+    name: "Migración de datos",
+    description: "Importación de datos antiguos (Excel, papel) al sistema",
+    price: 400000,
+    sort_order: 2,
+  },
+  {
+    code: "custom-report",
+    name: "Reporte personalizado",
+    description: "Desarrollo de un reporte a la medida",
+    price: 600000,
+    sort_order: 3,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -348,7 +473,9 @@ async function columnExists(connection, table, column) {
 
 async function addColumnIfMissing(connection, table, column, definition) {
   if (await columnExists(connection, table, column)) return false;
-  await connection.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  await connection.query(
+    `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
+  );
   return true;
 }
 
@@ -396,7 +523,15 @@ export async function seedBillingCatalog(connection) {
          price_monthly = VALUES(price_monthly), price_yearly = VALUES(price_yearly),
          trial_days = VALUES(trial_days),
          sort_order = VALUES(sort_order)`,
-      [p.code, p.name, p.description, p.price_monthly, p.price_yearly, p.trial_days || 0, p.sort_order],
+      [
+        p.code,
+        p.name,
+        p.description,
+        p.price_monthly,
+        p.price_yearly,
+        p.trial_days || 0,
+        p.sort_order,
+      ],
     );
 
     const [[planRow]] = await connection.query(
@@ -474,7 +609,13 @@ export async function ensureDefaultOrganization(connection) {
            (organization_id, plan_id, status, billing_cycle, amount,
             current_period_start, current_period_end)
          VALUES (?, ?, 'active', 'yearly', ?, ?, ?)`,
-        [organizationId, plan.id, plan.price_yearly, toDate(start), toDate(end)],
+        [
+          organizationId,
+          plan.id,
+          plan.price_yearly,
+          toDate(start),
+          toDate(end),
+        ],
       );
     }
   }

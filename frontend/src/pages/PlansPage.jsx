@@ -38,7 +38,9 @@ const PLAN_ICONS = {
 
 function limitLabel(feature) {
   if (feature.code === "limit.users") {
-    return feature.limit ? `Hasta ${feature.limit} usuarios` : "Usuarios ilimitados";
+    return feature.limit
+      ? `Hasta ${feature.limit} usuarios`
+      : "Usuarios ilimitados";
   }
   return feature.name;
 }
@@ -71,7 +73,10 @@ export function PlansPage() {
             <span className="font-bold text-unal-primary text-xl">SIVEP</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link to="/" className="text-unal-secondary hover:text-unal-primary font-medium">
+            <Link
+              to="/"
+              className="text-unal-secondary hover:text-unal-primary font-medium"
+            >
               Inicio
             </Link>
             <Link to="/login" className="btn-primary">
@@ -90,16 +95,17 @@ export function PlansPage() {
             Lleva tu granja al siguiente nivel
           </h1>
           <p className="text-unal-secondary-light max-w-2xl mx-auto">
-            Gestión de inventario y ventas, proyecciones con álgebra lineal y
-            análisis con cálculo diferencial. Elige el plan que se ajusta a tu
-            operación.
+            Gestión de inventario y ventas, proyecciones y análisis . Elige el
+            plan que se ajusta a tu operación.
           </p>
 
           <div className="inline-flex items-center gap-1 mt-6 p-1 bg-white rounded-lg border border-gray-200">
             <button
               onClick={() => setCycle("monthly")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                cycle === "monthly" ? "bg-unal-primary text-white" : "text-unal-secondary"
+                cycle === "monthly"
+                  ? "bg-unal-primary text-white"
+                  : "text-unal-secondary"
               }`}
             >
               Mensual
@@ -107,7 +113,9 @@ export function PlansPage() {
             <button
               onClick={() => setCycle("yearly")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                cycle === "yearly" ? "bg-unal-primary text-white" : "text-unal-secondary"
+                cycle === "yearly"
+                  ? "bg-unal-primary text-white"
+                  : "text-unal-secondary"
               }`}
             >
               Anual
@@ -181,7 +189,11 @@ export function PlansPage() {
 
                     <Link
                       to="/login"
-                      className={isPro ? "btn-primary text-center" : "btn-outline text-center"}
+                      className={
+                        isPro
+                          ? "btn-primary text-center"
+                          : "btn-outline text-center"
+                      }
                     >
                       Solicitar plan
                     </Link>
@@ -204,16 +216,16 @@ export function PlansPage() {
                 </p>
                 <ul className="space-y-2 text-sm text-unal-secondary">
                   <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-unal-accent" /> Licencia única:{" "}
-                    <strong>$8.000.000 – $15.000.000 COP</strong>
+                    <Check className="w-4 h-4 text-unal-accent" /> Licencia
+                    única: <strong>$8.000.000 – $15.000.000 COP</strong>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-unal-accent" /> Mantenimiento
                     anual (desde el año 2): 15% – 20% de la licencia
                   </li>
                   <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-unal-accent" /> Actualizaciones,
-                    backups y soporte técnico
+                    <Check className="w-4 h-4 text-unal-accent" />{" "}
+                    Actualizaciones, backups y soporte técnico
                   </li>
                 </ul>
               </article>

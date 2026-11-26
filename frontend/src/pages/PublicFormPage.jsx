@@ -551,9 +551,9 @@ export function PublicFormPage() {
                       const key = variantKey(product, variant, index);
                       const quantity = Number(quantities[key]) || 0;
                       const factor = Number(variant.stock_factor) || 1;
-                      const available =
-                        Math.floor((Number(product.current_stock) / factor) * 1000) /
-                        1000;
+                      const stockBase = Number(product.current_stock);
+                      const maxQty = Math.floor(stockBase / factor);
+                      const available = stockBase;
                       const selectedKey =
                         variant.id != null ? `v${variant.id}` : `p${product.id}-${index}`;
                       return (
@@ -594,7 +594,8 @@ export function PublicFormPage() {
                             <p className="text-xs text-unal-secondary-light">
                               {formatCurrency(variant.price)} /{' '}
                               {variant.unit_label || product.unit} · Stock{' '}
-                              {Number(available).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
+                              {Number(available).toLocaleString('es-CO', { maximumFractionDigits: 3 })}{' '}
+                              {product.unit}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -608,11 +609,11 @@ export function PublicFormPage() {
                               id={`quantity-${product.id}`}
                               type="number"
                               min="0"
-                              max={available}
+                              max={maxQty}
                               step={variantStep(variant)}
                               value={quantities[key] ?? ''}
                               onChange={(event) =>
-                                setQuantity(key, event.target.value, available)
+                                setQuantity(key, event.target.value, maxQty)
                               }
                               className="input-field w-24 text-center"
                             />

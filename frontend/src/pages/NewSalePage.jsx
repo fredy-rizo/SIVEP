@@ -203,7 +203,7 @@ export function NewSalePage() {
       render: (v, row) => {
         const variant = selectedVariantFor(row);
         const factor = Number(variant.stock_factor) || 1;
-        return `${(Number(row.current_stock) / factor).toLocaleString('es-CO', { maximumFractionDigits: 3 })} ${variant.unit_label || row.unit}`;
+        return `${Number(row.current_stock).toLocaleString('es-CO', { maximumFractionDigits: 3 })} ${row.unit}`;
       },
     },
   ];

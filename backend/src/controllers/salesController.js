@@ -63,7 +63,7 @@ export async function getSales(request, reply) {
      JOIN customers c ON s.customer_id = c.id
      JOIN users u ON s.created_by = u.id
      ${whereClause}
-     ORDER BY s.sale_date DESC
+     ORDER BY s.created_at DESC, s.sale_date DESC, s.id DESC
      LIMIT ? OFFSET ?`,
     [...params, limit, offset],
   );

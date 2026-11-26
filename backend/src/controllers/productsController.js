@@ -158,7 +158,7 @@ export async function getProducts(request, reply) {
 
   const [products] = await pool.query(
     `SELECT * FROM products ${whereClause}
-     ORDER BY name ASC
+     ORDER BY created_at DESC, id DESC
      LIMIT ? OFFSET ?`,
     [...params, limit, offset],
   );

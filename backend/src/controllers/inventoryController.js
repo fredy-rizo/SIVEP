@@ -42,9 +42,9 @@ export async function getInventory(request, reply) {
   
   const [products] = await pool.query(
     `SELECT * FROM products ${whereClause}
-     ORDER BY name ASC
+     ORDER BY created_at DESC, id DESC
      LIMIT ? OFFSET ?`,
-    [...params, limit, offset]
+    [...params, limit, offset],
   );
   
   const [countResult] = await pool.query(

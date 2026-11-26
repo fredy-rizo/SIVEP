@@ -290,7 +290,7 @@ export async function exportSalesCSV(request, reply) {
      FROM sales s
      JOIN customers c ON s.customer_id = c.id
      ${whereClause}
-     ORDER BY s.sale_date DESC`,
+     ORDER BY s.created_at DESC, s.sale_date DESC`,
     params,
   );
 

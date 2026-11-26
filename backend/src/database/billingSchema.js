@@ -270,7 +270,7 @@ export const featureCatalog = [
     name: "Proyecciones",
     category: "Analítica",
     kind: "boolean",
-    description: "Pronóstico de ventas por mínimos cuadrados",
+    description: "Pronóstico de ventas",
     sort_order: 30,
   },
   {
@@ -278,7 +278,7 @@ export const featureCatalog = [
     name: "Ritmo y optimización",
     category: "Analítica",
     kind: "boolean",
-    description: "Velocidad/aceleración de ventas y pedido óptimo (EOQ)",
+    description: "Velocidad/aceleración de ventas y pedido óptimo",
     sort_order: 31,
   },
   {

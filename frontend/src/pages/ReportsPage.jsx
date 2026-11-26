@@ -917,8 +917,7 @@ export function ReportsPage() {
             ) : (
               <LockedFeature
                 title="Proyección de ventas"
-                featureLabel="Álgebra lineal · Plan Profesional"
-                description="El pronóstico de ventas por mínimos cuadrados está disponible desde el plan Profesional."
+                description="El pronóstico de ventas está disponible desde el plan Profesional."
               />
             ))}
           {/* {activeTab === "optimization" &&
@@ -927,8 +926,7 @@ export function ReportsPage() {
             ) : (
               <LockedFeature
                 title="Ritmo de ventas y pedido óptimo"
-                featureLabel="Cálculo diferencial · Plan Profesional"
-                description="La velocidad/aceleración de ventas (derivadas) y el tamaño económico de pedido (EOQ) están disponibles desde el plan Profesional."
+                description="La velocidad/aceleración de ventas y el tamaño económico de pedido están disponibles desde el plan Profesional."
               />
             ))} */}
         </>

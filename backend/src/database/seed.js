@@ -44,20 +44,20 @@ async function runSeed() {
     const products = [
       {
         name: "Huevos",
-        unit: "cubeta",
-        current_price: 12000.0,
-        current_stock: 100,
-        min_stock: 20,
+        unit: "huevo",
+        current_price: 400.0,
+        current_stock: 3000,
+        min_stock: 600,
         category: "Avícola",
         description: "Huevos frescos de gallinas ponedoras",
         is_active: true,
         variants: [
-          { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 1 },
+          { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 30 },
           {
             name: "Media cubeta",
             unit_label: "media cubeta",
             price: 6000,
-            stock_factor: 0.5,
+            stock_factor: 15,
           },
         ],
       },
@@ -125,20 +125,15 @@ async function runSeed() {
       },
       {
         name: "Porcino",
-        unit: "kg",
+        unit: "unidad",
         current_price: 5000.0,
-        current_stock: 150,
-        min_stock: 20,
+        current_stock: 15,
+        min_stock: 5,
         category: "Porcino",
-        description: "Porcino vendido por kilo vivo",
+        description: "Porcino vendido por unidad",
         is_active: true,
         variants: [
-          {
-            name: "Kilo vivo",
-            unit_label: "kg vivo",
-            price: 5000,
-            stock_factor: 1,
-          },
+          { name: "Unidad", unit_label: "unidad", price: 5000, stock_factor: 1 },
         ],
       },
     ];

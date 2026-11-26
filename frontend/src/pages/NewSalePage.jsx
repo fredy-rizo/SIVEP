@@ -203,7 +203,7 @@ export function NewSalePage() {
       render: (v, row) => {
         const variant = selectedVariantFor(row);
         const factor = Number(variant.stock_factor) || 1;
-        return `${Math.floor((Number(row.current_stock) / factor) * 1000) / 1000} ${variant.unit_label || row.unit}`;
+        return `${(Number(row.current_stock) / factor).toLocaleString('es-CO', { maximumFractionDigits: 3 })} ${variant.unit_label || row.unit}`;
       },
     },
   ];
@@ -223,7 +223,10 @@ export function NewSalePage() {
           onChange={(e) => {
             const newItems = [...items];
             const index = items.indexOf(row);
-            const next = Math.max(0, Math.min(Number(e.target.value), row.max_stock));
+            const normalized = String(e.target.value ?? '').replace(',', '.');
+            const parsed = Number(normalized);
+            if (Number.isNaN(parsed)) return;
+            const next = Math.max(0, Math.min(parsed, row.max_stock));
             newItems[index].quantity = next;
             newItems[index].total = next * newItems[index].unit_price;
             setItems(newItems);

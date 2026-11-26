@@ -110,10 +110,11 @@ export function PublicFormPage() {
   );
 
   const setQuantity = (key, rawValue, max) => {
+    const normalized = String(rawValue ?? '').replace(',', '.');
     const value =
       rawValue === ''
         ? ''
-        : Math.max(0, Math.min(Number(rawValue), Number(max)));
+        : Math.max(0, Math.min(Number(normalized), Number(max)));
     setQuantities((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, items: '', general: '' }));
   };
@@ -593,7 +594,7 @@ export function PublicFormPage() {
                             <p className="text-xs text-unal-secondary-light">
                               {formatCurrency(variant.price)} /{' '}
                               {variant.unit_label || product.unit} · Stock{' '}
-                              {available}
+                              {Number(available).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

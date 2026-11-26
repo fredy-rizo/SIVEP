@@ -409,8 +409,8 @@ export function ReportsPage() {
             columns={[
               { key: "name", label: "Producto" },
               { key: "unit", label: "Unidad" },
-              { key: "current_stock", label: "Stock actual" },
-              { key: "min_stock", label: "Stock mínimo" },
+              { key: "current_stock", label: "Stock actual", render: (v) => Number(v).toLocaleString('es-CO', { maximumFractionDigits: 3 }) },
+              { key: "min_stock", label: "Stock mínimo", render: (v) => Number(v).toLocaleString('es-CO', { maximumFractionDigits: 3 }) },
               { key: "stock_value_formatted", label: "Valor en stock" },
             ]}
             data={lowStockProducts}

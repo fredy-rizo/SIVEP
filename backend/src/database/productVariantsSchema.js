@@ -196,20 +196,26 @@ export async function ensureProductVariants(connection) {
   //    nueva para que el administrador lo ajuste con un conteo físico.
   await ensureRealPresentations(connection);
 
+  // 6. Conversión de Huevos a base en huevos individuales (30 por cubeta,
+  //    15 por media cubeta). Solo se aplica una vez: detecta la presentación
+  //    anterior (factor 1 / 0,5) y la convierte. Después el producto queda con
+  //    unidad "huevo" y no vuelve a entrar aquí.
+  await convertPorcinoToUnits(connection);
+
   return true;
 }
 
 const REAL_PRESENTATIONS = {
   huevos: {
-    unit: "cubeta",
-    price: 12000,
+    unit: "huevo",
+    price: 400,
     variants: [
-      { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 1 },
+      { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 30 },
       {
         name: "Media cubeta",
         unit_label: "media cubeta",
         price: 6000,
-        stock_factor: 0.5,
+        stock_factor: 15,
       },
     ],
   },
@@ -241,15 +247,10 @@ const REAL_PRESENTATIONS = {
     ],
   },
   porcino: {
-    unit: "kg",
+    unit: "unidad",
     price: 5000,
     variants: [
-      {
-        name: "Kilo vivo",
-        unit_label: "kg vivo",
-        price: 5000,
-        stock_factor: 1,
-      },
+      { name: "Unidad", unit_label: "unidad", price: 5000, stock_factor: 1 },
     ],
   },
 };
@@ -317,5 +318,73 @@ async function ensureRealPresentations(connection) {
     console.log(
       `Presentaciones reales aplicadas a "${row.name}" (stock base: ${real.unit})`,
     );
+  }
+}
+
+async function convertHuevosToEggBase(connection) {
+  const [rows] = await connection.query(`
+    SELECT p.id, p.organization_id, p.current_stock, p.min_stock
+    FROM products p
+    WHERE p.unit = 'cubeta' AND LOWER(p.name) = 'huevos'
+  `);
+
+  for (const row of rows) {
+    const [variants] = await connection.query(
+      `SELECT id, name, stock_factor
+       FROM product_variants
+       WHERE product_id = ? AND organization_id = ?`,
+      [row.id, row.organization_id],
+    );
+    const cubeta = variants.find((v) => v.name === "Cubeta");
+    const media = variants.find((v) => v.name === "Media cubeta");
+    if (!cubeta || !media) continue;
+    if (Number(cubeta.stock_factor) !== 1 || Number(media.stock_factor) !== 0.5) {
+      continue;
+    }
+
+    await connection.query(
+      "UPDATE products SET unit = 'huevo', current_price = 400, current_stock = current_stock * 30, min_stock = min_stock * 30 WHERE id = ? AND organization_id = ?",
+      [row.id, row.organization_id],
+    );
+    await connection.query(
+      "UPDATE product_variants SET stock_factor = 30 WHERE id = ?",
+      [cubeta.id],
+    );
+    await connection.query(
+      "UPDATE product_variants SET stock_factor = 15 WHERE id = ?",
+      [media.id],
+    );
+    console.log(
+      `Huevos convertidos a base en huevos individuales (stock x30) para producto ${row.id}`,
+    );
+  }
+}
+
+async function convertPorcinoToUnits(connection) {
+  const [rows] = await connection.query(`
+    SELECT p.id, p.organization_id
+    FROM products p
+    WHERE p.unit = 'kg' AND LOWER(p.name) = 'porcino'
+  `);
+
+  for (const row of rows) {
+    const [variants] = await connection.query(
+      `SELECT id, name, stock_factor
+       FROM product_variants
+       WHERE product_id = ? AND organization_id = ?`,
+      [row.id, row.organization_id],
+    );
+    const kilo = variants.find((v) => v.name === "Kilo vivo");
+    if (!kilo || Number(kilo.stock_factor) !== 1) continue;
+
+    await connection.query(
+      "UPDATE products SET unit = 'unidad', current_price = 5000 WHERE id = ? AND organization_id = ?",
+      [row.id, row.organization_id],
+    );
+    await connection.query(
+      "UPDATE product_variants SET name = 'Unidad', unit_label = 'unidad' WHERE id = ?",
+      [kilo.id],
+    );
+    console.log(`Porcino convertido a base en unidades para producto ${row.id}`);
   }
 }

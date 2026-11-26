@@ -143,7 +143,7 @@ export function InventoryPage() {
     { key: 'current_price', label: 'Precio', render: (v) => formatCOP(v) },
     { key: 'current_stock', label: 'Stock actual', render: (v, row) => (
       <span className={v <= row.min_stock && v > 0 ? 'text-yellow-600 font-medium' : v === 0 ? 'text-red-600 font-medium' : 'font-medium'}>
-        {v} {row.unit}
+        {Number(v).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {row.unit}
       </span>
     ), sortable: true },
     { key: 'min_stock', label: 'Stock mínimo' },
@@ -335,7 +335,7 @@ export function InventoryPage() {
               onChange={(e) => setMovementForm(prev => ({ ...prev, product_id: e.target.value }))}
               error={movementErrors.product_id}
               required
-              options={[{ value: '', label: 'Seleccionar producto...' }, ...products.map(p => ({ value: p.id, label: `${p.name} (Stock: ${p.current_stock} ${p.unit})` }))]}
+              options={[{ value: '', label: 'Seleccionar producto...' }, ...products.map(p => ({ value: p.id, label: `${p.name} (Stock: ${Number(p.current_stock).toLocaleString('es-CO', { maximumFractionDigits: 3 })} ${p.unit})` }))]}
             />
             <Select
               label="Tipo de movimiento *"
@@ -351,7 +351,7 @@ export function InventoryPage() {
               min="0.001"
               step="0.001"
               value={movementForm.quantity}
-              onChange={(e) => setMovementForm(prev => ({ ...prev, quantity: e.target.value }))}
+              onChange={(e) => setMovementForm(prev => ({ ...prev, quantity: String(e.target.value ?? '').replace(',', '.') }))}
               error={movementErrors.quantity}
               required
             />

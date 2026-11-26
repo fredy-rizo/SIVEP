@@ -139,8 +139,8 @@ export function ProductsPage() {
               id: variant.id,
               name: variant.name,
               unit_label: variant.unit_label || product.unit,
-              price: variant.price,
-              stock_factor: variant.stock_factor,
+              price: Number(variant.price),
+              stock_factor: Number(variant.stock_factor),
             }))
           : [
               {
@@ -155,8 +155,8 @@ export function ProductsPage() {
         name: product.name,
         unit: product.unit,
         current_price: product.current_price,
-        current_stock: product.current_stock,
-        min_stock: product.min_stock,
+        current_stock: Number(product.current_stock),
+        min_stock: Number(product.min_stock),
         category: product.category,
         description: product.description || "",
         image_url: product.image_url || "",
@@ -246,10 +246,10 @@ export function ProductsPage() {
         unit: formData.unit,
         current_price:
           formData.variants.length > 0
-            ? parseFloat(formData.variants[0].price)
-            : parseFloat(formData.current_price),
-        current_stock: parseFloat(formData.current_stock),
-        min_stock: parseFloat(formData.min_stock),
+            ? parseFloat(String(formData.variants[0].price).replace(',', '.'))
+            : parseFloat(String(formData.current_price).replace(',', '.')),
+        current_stock: parseFloat(String(formData.current_stock).replace(',', '.')),
+        min_stock: parseFloat(String(formData.min_stock).replace(',', '.')),
         category: formData.category,
         description: formData.description || null,
         image_url: formData.image_url || null,
@@ -260,8 +260,8 @@ export function ProductsPage() {
                 id: variant.id || undefined,
                 name: variant.name,
                 unit_label: variant.unit_label,
-                price: parseFloat(variant.price),
-                stock_factor: parseFloat(variant.stock_factor),
+                price: parseFloat(String(variant.price).replace(',', '.')),
+                stock_factor: parseFloat(String(variant.stock_factor).replace(',', '.')),
                 sort_order: index,
               }))
             : undefined,
@@ -328,19 +328,19 @@ export function ProductsPage() {
       render: (v, row) => (
         <span
           className={
-            v <= row.min_stock && v > 0
+            Number(v) <= Number(row.min_stock) && v > 0
               ? "text-yellow-600 font-medium"
               : v === 0
                 ? "text-red-600 font-medium"
                 : ""
           }
         >
-          {v} {row.unit}
+          {Number(v).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {row.unit}
         </span>
       ),
       sortable: true,
     },
-    { key: "min_stock", label: "Stock Mín" },
+    { key: "min_stock", label: "Stock Mín", render: (v) => Number(v).toLocaleString('es-CO', { maximumFractionDigits: 3 }) },
     {
       key: "is_active",
       label: "Estado",
@@ -439,7 +439,7 @@ export function ProductsPage() {
         emptyMessage="No se encontraron productos"
         renderActions={(row) => (
           <div className="flex items-center justify-end gap-1">
-            {row.current_stock <= row.min_stock && row.current_stock > 0 && (
+            { Number(row.current_stock) <= Number(row.min_stock) && row.current_stock > 0 && (
               <span className="badge badge-warning mr-2 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> Stock bajo
               </span>

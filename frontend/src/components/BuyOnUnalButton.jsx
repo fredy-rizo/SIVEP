@@ -207,7 +207,7 @@ export function BuyOnUnalButton({
                         )}
                       </div>
                       <span className="badge badge-success whitespace-nowrap">
-                        {product.current_stock} {product.unit} disp.
+                        {Number(product.current_stock).toLocaleString('es-CO', { maximumFractionDigits: 3 })} {product.unit} disp.
                       </span>
                     </li>
                   ))}

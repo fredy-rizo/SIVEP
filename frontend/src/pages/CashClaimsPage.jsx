@@ -609,7 +609,7 @@ export function CashClaimsPage() {
                                 insufficient ? 'text-red-600' : 'text-unal-secondary'
                               }`}
                             >
-                              {item.current_stock ?? 0}
+                              {Number(item.current_stock ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 3 })}
                             </span>
                           </td>
                           <td className="text-right">

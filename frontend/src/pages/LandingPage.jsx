@@ -18,7 +18,7 @@ const products = [
   {
     name: "Gallinas Ponedoras",
     unit: "unidad",
-    presentations: [{ label: "Unidad", price: 85000 }],
+    presentations: [{ label: "Unidad", price: 25000 }],
     image:
       "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=400&h=300&fit=crop",
     category: "Avícola",

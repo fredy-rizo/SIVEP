@@ -52,7 +52,12 @@ async function runSeed() {
         description: "Huevos frescos de gallinas ponedoras",
         is_active: true,
         variants: [
-          { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 30 },
+          {
+            name: "Cubeta",
+            unit_label: "cubeta",
+            price: 12000,
+            stock_factor: 30,
+          },
           {
             name: "Media cubeta",
             unit_label: "media cubeta",
@@ -64,14 +69,19 @@ async function runSeed() {
       {
         name: "Gallinas Ponedoras",
         unit: "unidad",
-        current_price: 85000.0,
+        current_price: 25000.0,
         current_stock: 50,
         min_stock: 10,
         category: "Avícola",
         description: "Gallinas ponedoras en producción",
         is_active: true,
         variants: [
-          { name: "Unidad", unit_label: "unidad", price: 85000, stock_factor: 1 },
+          {
+            name: "Unidad",
+            unit_label: "unidad",
+            price: 25000,
+            stock_factor: 1,
+          },
         ],
       },
       {
@@ -133,7 +143,12 @@ async function runSeed() {
         description: "Porcino vendido por unidad",
         is_active: true,
         variants: [
-          { name: "Unidad", unit_label: "unidad", price: 5000, stock_factor: 1 },
+          {
+            name: "Unidad",
+            unit_label: "unidad",
+            price: 5000,
+            stock_factor: 1,
+          },
         ],
       },
     ];

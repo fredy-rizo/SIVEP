@@ -18,7 +18,7 @@ const products = [
   {
     id: 2,
     name: "Gallinas Ponedoras",
-    current_price: "85000.00",
+    current_price: "25000.00",
     current_stock: 50,
   },
   {

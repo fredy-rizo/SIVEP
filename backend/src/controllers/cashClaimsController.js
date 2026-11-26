@@ -13,6 +13,11 @@ import {
   InventoryError,
 } from "../services/inventoryService.js";
 import { publishCatalogUpdate } from "../services/catalogEvents.js";
+import {
+  resolveSaleItem,
+  roundMoney,
+  roundStock,
+} from "../services/productVariants.js";
 import { resolveDefaultOrganizationId } from "../middleware/plan.js";
 
 // ============================================================================
@@ -61,10 +66,6 @@ function toDateOnly(value) {
   return `${year}-${month}-${day}`;
 }
 
-function roundMoney(value) {
-  return Math.round(Number(value || 0) * 100) / 100;
-}
-
 // MySQL devuelve una columna DATE como Date (con `timezone` fijo). Para armar
 // un DATETIME de MySQL hay que usar "YYYY-MM-DD"; interpolar el Date completo
 // produce un texto inválido. Esta función normaliza ambos casos.
@@ -91,16 +92,23 @@ function businessError(message, statusCode, code) {
   return error;
 }
 
-// Agrupa líneas repetidas del mismo producto: el catálogo se consulta una sola
-// vez y el total se calcula con precios de la base, nunca con los del cliente.
-function groupQuantities(items) {
-  const quantities = new Map();
-  for (const item of items) {
-    const productId = Number(item.product_id);
-    const quantity = Number(item.quantity);
-    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+// Agrupa líneas repetidas de la misma PRESENTACIÓN: el catálogo se consulta
+// una sola vez y el total se calcula con precios de la base, nunca del cliente.
+function groupResolvedItems(lines) {
+  const grouped = new Map();
+  for (const line of lines) {
+    const key = line.variant_id
+      ? `v-${line.variant_id}`
+      : `p-${line.product_id}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.quantity = roundStock(existing.quantity + line.quantity);
+      existing.total = roundMoney(existing.quantity * existing.unit_price);
+    } else {
+      grouped.set(key, { ...line });
+    }
   }
-  return quantities;
+  return [...grouped.values()];
 }
 
 // ============================================================================
@@ -178,9 +186,6 @@ export async function createCashClaim(request, reply) {
       return reply.code(400).send({ error: "La fecha de compra no es válida" });
     }
 
-    const quantities = groupQuantities(value.items);
-    const productIds = [...quantities.keys()].sort((a, b) => a - b);
-
     connection = await pool.getConnection();
 
     // Un recibo de caja no puede sustentar dos solicitudes activas ni una venta
@@ -209,32 +214,31 @@ export async function createCashClaim(request, reply) {
       });
     }
 
-    const [products] = await connection.query(
-      `SELECT id, name, unit, current_price
-       FROM products
-       WHERE organization_id = ? AND is_active = TRUE AND id IN (?)`,
-      [organizationId, productIds],
-    );
-    if (products.length !== productIds.length) {
-      return reply.code(400).send({
-        error: "Uno o más productos ya no están disponibles. Actualiza la página.",
-      });
+    // Resolver cada línea contra las presentaciones reales. El precio y el
+    // factor de stock salen de la base, nunca del formulario.
+    const resolvedLines = [];
+    for (const item of value.items) {
+      const line = await resolveSaleItem(connection, organizationId, item);
+      if (!line) {
+        return reply.code(400).send({
+          error:
+            "Uno o más productos ya no están disponibles. Actualiza la página.",
+        });
+      }
+      resolvedLines.push(line);
     }
 
-    const productById = new Map(products.map((p) => [Number(p.id), p]));
-    const claimItems = productIds.map((productId) => {
-      const product = productById.get(productId);
-      const quantity = quantities.get(productId);
-      const unitPrice = roundMoney(product.current_price);
-      return {
-        product_id: productId,
-        product_name: product.name,
-        product_unit: product.unit,
-        quantity,
-        unit_price: unitPrice,
-        total: roundMoney(unitPrice * quantity),
-      };
-    });
+    const claimItems = groupResolvedItems(resolvedLines).map((line) => ({
+      product_id: line.product_id,
+      variant_id: line.variant_id,
+      variant_name: line.variant_name,
+      product_name: line.description,
+      product_unit: line.unit_label,
+      quantity: line.quantity,
+      unit_price: line.unit_price,
+      total: line.total,
+      stock_quantity: line.stock_quantity,
+    }));
     const computedTotal = roundMoney(
       claimItems.reduce((sum, item) => sum + item.total, 0),
     );
@@ -279,8 +283,9 @@ export async function createCashClaim(request, reply) {
     for (const item of claimItems) {
       await connection.query(
         `INSERT INTO cash_purchase_claim_items
-           (claim_id, product_id, product_name, product_unit, unit_price, quantity, total)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           (claim_id, product_id, product_name, product_unit, unit_price, quantity,
+            total, variant_id, variant_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           claimId,
           item.product_id,
@@ -289,6 +294,8 @@ export async function createCashClaim(request, reply) {
           item.unit_price,
           item.quantity,
           item.total,
+          item.variant_id,
+          item.variant_name,
         ],
       );
     }
@@ -495,9 +502,10 @@ export async function getCashClaimById(request, reply) {
     }
 
     const [items] = await pool.query(
-      `SELECT ci.*, p.current_stock, p.is_active
+      `SELECT ci.*, p.current_stock, p.is_active, v.stock_factor
        FROM cash_purchase_claim_items ci
        LEFT JOIN products p ON p.id = ci.product_id
+       LEFT JOIN product_variants v ON v.id = ci.variant_id
        WHERE ci.claim_id = ?
        ORDER BY ci.id`,
       [id],
@@ -586,9 +594,11 @@ export async function approveCashClaim(request, reply) {
     }
 
     const [items] = await connection.query(
-      `SELECT ci.*, p.current_price, p.is_active
+      `SELECT ci.*, p.current_price, p.is_active,
+              v.stock_factor, v.name AS current_variant_name
        FROM cash_purchase_claim_items ci
        JOIN products p ON p.id = ci.product_id
+       LEFT JOIN product_variants v ON v.id = ci.variant_id
        WHERE ci.claim_id = ?
        ORDER BY ci.product_id`,
       [id],
@@ -733,8 +743,9 @@ export async function approveCashClaim(request, reply) {
     for (const item of items) {
       await connection.query(
         `INSERT INTO sale_items
-           (sale_id, product_id, description, source, quantity, unit_price, total)
-         VALUES (?, ?, ?, 'inventario', ?, ?, ?)`,
+           (sale_id, product_id, description, source, quantity, unit_price, total,
+            variant_id, variant_name, unit_label)
+         VALUES (?, ?, ?, 'inventario', ?, ?, ?, ?, ?, ?)`,
         [
           saleId,
           item.product_id,
@@ -742,14 +753,21 @@ export async function approveCashClaim(request, reply) {
           item.quantity,
           item.unit_price,
           item.total,
+          item.variant_id,
+          item.variant_name || item.current_variant_name,
+          item.product_unit,
         ],
+      );
+
+      const stockQuantity = roundStock(
+        Number(item.quantity) * (Number(item.stock_factor) || 1),
       );
 
       const change = await applyStockMovement(connection, {
         organizationId,
         productId: item.product_id,
         movementType: "salida",
-        quantity: item.quantity,
+        quantity: stockQuantity,
         reason: `Compra en efectivo ${invoiceNumber} (caja ${claim.cash_receipt_code})`,
         referenceType: "venta",
         referenceId: saleId,

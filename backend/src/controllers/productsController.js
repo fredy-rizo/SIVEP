@@ -5,6 +5,7 @@ import {
   buildPaginatedResponse,
 } from "../utils/helpers.js";
 import { uploadImage } from "../utils/upload.js";
+import { attachVariants } from "../services/productVariants.js";
 import { publishCatalogUpdate } from "../services/catalogEvents.js";
 
 // ============================================================================
@@ -13,7 +14,83 @@ import { publishCatalogUpdate } from "../services/catalogEvents.js";
 // Cada alta, edición o desactivación de producto invalida la caché pública y
 // emite un evento WebSocket. Sin esto, un producto nuevo podría tardar hasta el
 // TTL de la caché en aparecer en el escaparate.
+//
+// Los precios viven en las PRESENTACIONES (`product_variants`). El producto
+// conserva `current_price` solo como valor de referencia para reportes de
+// valorización; la venta siempre usa el precio de la presentación elegida.
 // ============================================================================
+
+// Crea/actualiza/desactiva las presentaciones enviadas por el panel. No se
+// borran filas para no romper el histórico de ventas que las referencia.
+async function syncVariants(executor, organizationId, productId, variants) {
+  if (!Array.isArray(variants)) return;
+
+  const [existingRows] = await executor.query(
+    "SELECT id FROM product_variants WHERE product_id = ? AND organization_id = ?",
+    [productId, organizationId],
+  );
+  const existingIds = new Set(existingRows.map((row) => Number(row.id)));
+  const submittedIds = new Set();
+
+  for (const [index, variant] of variants.entries()) {
+    const payload = {
+      name: variant.name,
+      unit_label: variant.unit_label,
+      price: variant.price,
+      stock_factor: variant.stock_factor ?? 1,
+      is_active: variant.is_active !== false,
+      sort_order: variant.sort_order ?? index,
+    };
+
+    if (variant.id && existingIds.has(Number(variant.id))) {
+      submittedIds.add(Number(variant.id));
+      await executor.query(
+        `UPDATE product_variants
+         SET name = ?, unit_label = ?, price = ?, stock_factor = ?,
+             is_active = ?, sort_order = ?
+         WHERE id = ? AND product_id = ? AND organization_id = ?`,
+        [
+          payload.name,
+          payload.unit_label,
+          payload.price,
+          payload.stock_factor,
+          payload.is_active,
+          payload.sort_order,
+          variant.id,
+          productId,
+          organizationId,
+        ],
+      );
+    } else {
+      const [result] = await executor.query(
+        `INSERT INTO product_variants
+           (organization_id, product_id, name, unit_label, price, stock_factor,
+            is_active, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          organizationId,
+          productId,
+          payload.name,
+          payload.unit_label,
+          payload.price,
+          payload.stock_factor,
+          payload.is_active,
+          payload.sort_order,
+        ],
+      );
+      submittedIds.add(Number(result.insertId));
+    }
+  }
+
+  for (const id of existingIds) {
+    if (!submittedIds.has(id)) {
+      await executor.query(
+        "UPDATE product_variants SET is_active = FALSE WHERE id = ? AND organization_id = ?",
+        [id, organizationId],
+      );
+    }
+  }
+}
 
 export async function uploadProductImage(request, reply) {
   if (!request.isMultipart()) {
@@ -91,8 +168,14 @@ export async function getProducts(request, reply) {
     params,
   );
 
+  const withVariants = await attachVariants(
+    pool,
+    request.organizationId,
+    products,
+  );
+
   return reply.send(
-    buildPaginatedResponse(products, countResult[0].total, page, limit),
+    buildPaginatedResponse(withVariants, countResult[0].total, page, limit),
   );
 }
 
@@ -108,7 +191,13 @@ export async function getProductById(request, reply) {
     return reply.code(404).send({ error: "Producto no encontrado" });
   }
 
-  return reply.send({ product: products[0] });
+  const [product] = await attachVariants(
+    pool,
+    request.organizationId,
+    products,
+  );
+
+  return reply.send({ product });
 }
 
 export async function createProduct(request, reply) {
@@ -127,7 +216,11 @@ export async function createProduct(request, reply) {
     description,
     image_url,
     is_active,
+    variants = [],
   } = value;
+
+  const referencePrice =
+    variants.length > 0 ? Number(variants[0].price) : current_price;
 
   const [result] = await pool.query(
     `INSERT INTO products (organization_id, name, unit, current_price, current_stock, min_stock, category, description, image_url, is_active)
@@ -136,7 +229,7 @@ export async function createProduct(request, reply) {
       request.organizationId,
       name,
       unit,
-      current_price,
+      referencePrice,
       current_stock || 0,
       min_stock || 0,
       category,
@@ -146,15 +239,36 @@ export async function createProduct(request, reply) {
     ],
   );
 
+  // Un producto sin presentaciones explícitas nace con una equivalente a su
+  // unidad base, para que sea comprable de inmediato.
+  const variantList =
+    variants.length > 0
+      ? variants
+      : [
+          {
+            name: unit,
+            unit_label: unit,
+            price: referencePrice,
+            stock_factor: 1,
+          },
+        ];
+  await syncVariants(pool, request.organizationId, result.insertId, variantList);
+
   const [newProduct] = await pool.query(
     "SELECT * FROM products WHERE id = ? AND organization_id = ?",
     [result.insertId, request.organizationId],
   );
 
+  const [created] = await attachVariants(
+    pool,
+    request.organizationId,
+    newProduct,
+  );
+
   // Nuevo producto visible en el catálogo público (si nace con stock > 0).
   await publishCatalogUpdate(request.organizationId, []);
 
-  return reply.code(201).send({ product: newProduct[0] });
+  return reply.code(201).send({ product: created });
 }
 
 export async function updateProduct(request, reply) {
@@ -164,6 +278,7 @@ export async function updateProduct(request, reply) {
   }
 
   const { id } = request.params;
+  const { variants, ...productFields } = value;
 
   const [existing] = await pool.query(
     "SELECT id FROM products WHERE id = ? AND organization_id = ?",
@@ -176,33 +291,40 @@ export async function updateProduct(request, reply) {
   const fields = [];
   const params = [];
 
-  Object.entries(value).forEach(([key, val]) => {
+  Object.entries(productFields).forEach(([key, val]) => {
     if (val !== undefined) {
       fields.push(`${key} = ?`);
       params.push(val);
     }
   });
 
-  if (fields.length === 0) {
-    return reply.code(400).send({ error: "No hay campos para actualizar" });
+  if (fields.length > 0) {
+    params.push(id, request.organizationId);
+
+    await pool.query(
+      `UPDATE products SET ${fields.join(", ")} WHERE id = ? AND organization_id = ?`,
+      params,
+    );
   }
 
-  params.push(id, request.organizationId);
+  // Actualizar las presentaciones no exige reenviar el producto completo.
+  await syncVariants(pool, request.organizationId, id, variants);
 
-  await pool.query(
-    `UPDATE products SET ${fields.join(", ")} WHERE id = ? AND organization_id = ?`,
-    params,
-  );
-
-  const [updated] = await pool.query(
-    "SELECT * FROM products WHERE id = ? AND organization_id = ?",
-    [id, request.organizationId],
+  const [updated] = await attachVariants(
+    pool,
+    request.organizationId,
+    (
+      await pool.query(
+        "SELECT * FROM products WHERE id = ? AND organization_id = ?",
+        [id, request.organizationId],
+      )
+    )[0],
   );
 
   // Precio, stock, categoría o visibilidad pueden haber cambiado.
   await publishCatalogUpdate(request.organizationId, []);
 
-  return reply.send({ product: updated[0] });
+  return reply.send({ product: updated });
 }
 
 export async function deleteProduct(request, reply) {

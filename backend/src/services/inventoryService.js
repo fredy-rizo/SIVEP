@@ -75,7 +75,7 @@ export async function applyStockMovement(
     throw new InventoryError(`Tipo de movimiento inválido: ${movementType}`);
   }
 
-  const qty = Number(quantity);
+  const qty = Math.round(Number(quantity) * 1000) / 1000;
   if (!Number.isFinite(qty) || qty < 0) {
     throw new InventoryError("La cantidad debe ser un número mayor o igual a cero");
   }
@@ -93,11 +93,11 @@ export async function applyStockMovement(
     });
   }
 
-  const previousStock = Number(product.current_stock);
+  const previousStock = Math.round(Number(product.current_stock) * 1000) / 1000;
   let newStock;
 
   if (movementType === "entrada") {
-    newStock = previousStock + qty;
+    newStock = Math.round((previousStock + qty) * 1000) / 1000;
   } else if (movementType === "salida") {
     if (previousStock < qty) {
       throw new InventoryError(
@@ -112,7 +112,7 @@ export async function applyStockMovement(
         },
       );
     }
-    newStock = previousStock - qty;
+    newStock = Math.round((previousStock - qty) * 1000) / 1000;
   } else {
     newStock = qty;
   }

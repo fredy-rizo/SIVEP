@@ -30,28 +30,42 @@ export const userUpdateSchema = Joi.object({
   is_active: Joi.boolean(),
 }).min(1);
 
+// Presentación comprable de un producto. `stock_factor` es cuántas unidades
+// base de inventario descuenta vender una unidad de esta presentación.
+export const variantSchema = Joi.object({
+  id: Joi.number().integer().positive().allow(null),
+  name: Joi.string().min(1).max(120).required(),
+  unit_label: Joi.string().min(1).max(50).required(),
+  price: Joi.number().min(0).required(),
+  stock_factor: Joi.number().greater(0).default(1),
+  is_active: Joi.boolean().default(true),
+  sort_order: Joi.number().integer().default(0),
+});
+
 export const productSchema = Joi.object({
   name: Joi.string().min(2).max(255).required(),
   unit: Joi.string().min(1).max(50).required(),
   current_price: Joi.number().min(0).required(),
-  current_stock: Joi.number().integer().min(0).default(0),
-  min_stock: Joi.number().integer().min(0).default(0),
+  current_stock: Joi.number().min(0).default(0),
+  min_stock: Joi.number().min(0).default(0),
   category: Joi.string().min(1).max(100).required(),
   description: Joi.string().allow("", null),
   image_url: Joi.string().uri().allow("", null),
   is_active: Joi.boolean().default(true),
+  variants: Joi.array().items(variantSchema).default([]),
 });
 
 export const productUpdateSchema = Joi.object({
   name: Joi.string().min(2).max(255),
   unit: Joi.string().min(1).max(50),
   current_price: Joi.number().min(0),
-  current_stock: Joi.number().integer().min(0),
-  min_stock: Joi.number().integer().min(0),
+  current_stock: Joi.number().min(0),
+  min_stock: Joi.number().min(0),
   category: Joi.string().min(1).max(100),
   description: Joi.string().allow("", null),
   image_url: Joi.string().uri().allow("", null),
   is_active: Joi.boolean(),
+  variants: Joi.array().items(variantSchema),
 }).min(1);
 
 export const customerSchema = Joi.object({
@@ -88,10 +102,11 @@ export const saleSchema = Joi.object({
   items: Joi.array()
     .items(
       Joi.object({
-        product_id: Joi.number().integer().positive().required(),
-        quantity: Joi.number().integer().positive().required(),
-        unit_price: Joi.number().min(0).required(),
-      }),
+        product_id: Joi.number().integer().positive(),
+        variant_id: Joi.number().integer().positive().allow(null),
+        quantity: Joi.number().positive().required(),
+        unit_price: Joi.number().min(0),
+      }).or("variant_id", "product_id"),
     )
     .min(1)
     .required(),
@@ -100,7 +115,7 @@ export const saleSchema = Joi.object({
 export const inventoryMovementSchema = Joi.object({
   product_id: Joi.number().integer().positive().required(),
   movement_type: Joi.string().valid("entrada", "salida", "ajuste").required(),
-  quantity: Joi.number().integer().positive().required(),
+  quantity: Joi.number().positive().required(),
   reason: Joi.string().min(1).max(255).required(),
   reference_type: Joi.string()
     .valid("venta", "compra", "ajuste_manual", "devolucion", "otro")
@@ -133,9 +148,10 @@ export const publicLeadSchema = Joi.object({
   items: Joi.array()
     .items(
       Joi.object({
-        product_id: Joi.number().integer().positive().required(),
-        quantity: Joi.number().integer().positive().max(1000).required(),
-      }),
+        product_id: Joi.number().integer().positive(),
+        variant_id: Joi.number().integer().positive().allow(null),
+        quantity: Joi.number().positive().max(100000).required(),
+      }).or("variant_id", "product_id"),
     )
     .min(1)
     .required()
@@ -184,9 +200,10 @@ export const cashClaimSchema = Joi.object({
   items: Joi.array()
     .items(
       Joi.object({
-        product_id: Joi.number().integer().positive().required(),
-        quantity: Joi.number().integer().positive().max(1000).required(),
-      }),
+        product_id: Joi.number().integer().positive(),
+        variant_id: Joi.number().integer().positive().allow(null),
+        quantity: Joi.number().positive().max(100000).required(),
+      }).or("variant_id", "product_id"),
     )
     .min(1)
     .required()

@@ -12,6 +12,11 @@ import {
   setCachedPublicProductsIfCurrent,
 } from "../services/productCache.js";
 import { applyStockMovement, InventoryError } from "../services/inventoryService.js";
+import {
+  resolveSaleItem,
+  roundMoney,
+  roundStock,
+} from "../services/productVariants.js";
 import { publishCatalogUpdate } from "../services/catalogEvents.js";
 // El formulario público no tiene sesión: los datos se asocian a la
 // organización por defecto (la granja que publica el enlace).
@@ -59,10 +64,6 @@ function fileExtension(filename = "") {
   return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
 }
 
-function roundMoney(value) {
-  return Math.round(Number(value || 0) * 100) / 100;
-}
-
 // El formulario envía los productos como un campo JSON dentro del multipart.
 function parseItemsField(rawItems) {
   if (Array.isArray(rawItems)) return rawItems;
@@ -75,50 +76,23 @@ function parseItemsField(rawItems) {
   }
 }
 
-// Agrupa productos repetidos: el catálogo se consulta una vez y las cantidades
-// se suman antes de calcular la venta.
-function groupQuantities(items) {
-  const quantities = new Map();
+// Construye las líneas de venta con las presentaciones que el comprador
+// eligió. Los precios y los factores de stock salen siempre de la base de
+// datos, nunca del formulario.
+async function buildSelectedSalePlan(executor, organizationId, items) {
+  const saleItems = [];
+
   for (const item of items) {
-    const productId = Number(item.product_id);
-    const quantity = Number(item.quantity);
-    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
-  }
-  return quantities;
-}
-
-// Construye las líneas de venta con los productos que el comprador eligió.
-// Los precios salen siempre de la base de datos, nunca del formulario.
-function buildSelectedSalePlan(items, products) {
-  const quantities = groupQuantities(items);
-  const productById = new Map(
-    products.map((product) => [Number(product.id), product]),
-  );
-
-  const missing = [...quantities.keys()].filter(
-    (productId) => !productById.has(productId),
-  );
-  if (missing.length > 0) {
-    throw {
-      statusCode: 400,
-      message:
-        "Uno o más productos ya no están disponibles. Actualiza la página e inténtalo de nuevo.",
-    };
-  }
-
-  const saleItems = [...quantities.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([productId, quantity]) => {
-      const product = productById.get(productId);
-      const unitPrice = roundMoney(product.current_price);
-      return {
-        product_id: productId,
-        description: product.name,
-        quantity,
-        unit_price: unitPrice,
-        total: roundMoney(unitPrice * quantity),
+    const line = await resolveSaleItem(executor, organizationId, item);
+    if (!line) {
+      throw {
+        statusCode: 400,
+        message:
+          "Uno o más productos ya no están disponibles. Actualiza la página e inténtalo de nuevo.",
       };
-    });
+    }
+    saleItems.push(line);
+  }
 
   return {
     items: saleItems,
@@ -312,17 +286,10 @@ export async function createPublicLead(request, reply) {
     }
     const createdBy = sysUsers[0].id;
 
-    // 6. Cargar los productos activos para calcular la venta con sus precios
-    //    reales. Se incluyen los que están sin stock: la venta ya se pagó y la
-    //    falta de inventario se reporta como advertencia, no como fallo.
-    const [products] = await connection.query(
-      `SELECT id, name, current_price
-       FROM products
-       WHERE is_active = TRUE AND organization_id = ?`,
-      [organizationId],
-    );
-
-    const plan = buildSelectedSalePlan(items, products);
+    // 6. Calcular la venta con los precios y factores reales de cada
+    //    presentación. Se incluyen productos sin stock: la venta ya se pagó y
+    //    la falta de inventario se reporta como advertencia, no como fallo.
+    const plan = await buildSelectedSalePlan(connection, organizationId, items);
     const saleItems = plan.items;
     const warnings = [];
 
@@ -340,24 +307,23 @@ export async function createPublicLead(request, reply) {
     }
     const initialWarningsCount = warnings.length;
 
-    // 7. Agrupar cantidades por producto. La disponibilidad NO se decide aquí:
-    //    se comprueba al descontar, dentro de la transacción y con la fila
-    //    bloqueada. Así una compra simultánea no puede sobrevender.
+    // 7. Agrupar el consumo de inventario por producto (stock_quantity ya
+    //    aplica el factor de la presentación). La disponibilidad NO se decide
+    //    aquí: se comprueba al descontar, con la fila bloqueada.
     const stockChanges = new Map();
     for (const item of saleItems) {
       if (!item.product_id) continue;
-      const quantity = Number(item.quantity) || 0;
+      const quantity = Number(item.stock_quantity) || 0;
       stockChanges.set(
         item.product_id,
-        (stockChanges.get(item.product_id) || 0) + quantity,
+        roundStock((stockChanges.get(item.product_id) || 0) + quantity),
       );
     }
 
     // 8. Crear la venta externa con la fecha y el valor del comprobante.
-    const subtotal =
-      Math.round(
-        saleItems.reduce((sum, item) => sum + Number(item.total || 0), 0) * 100,
-      ) / 100;
+    const subtotal = roundMoney(
+      saleItems.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    );
     const total = Number(receipt.amount);
     const paymentStatus = "pagado";
     const notePrefix = "Compra externa pagada en línea (eCollect).";
@@ -413,8 +379,9 @@ export async function createPublicLead(request, reply) {
     for (const item of saleItems) {
       await connection.query(
         `INSERT INTO sale_items
-           (sale_id, product_id, description, source, quantity, unit_price, total)
-         VALUES (?, ?, ?, 'externo', ?, ?, ?)`,
+           (sale_id, product_id, description, source, quantity, unit_price, total,
+            variant_id, variant_name, unit_label)
+         VALUES (?, ?, ?, 'externo', ?, ?, ?, ?, ?, ?)`,
         [
           saleId,
           item.product_id,
@@ -422,6 +389,9 @@ export async function createPublicLead(request, reply) {
           item.quantity,
           item.unit_price,
           item.total,
+          item.variant_id,
+          item.variant_name,
+          item.unit_label,
         ],
       );
     }

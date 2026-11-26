@@ -194,12 +194,20 @@ export function BuyOnUnalButton({
                         <p className="truncate text-sm font-medium text-unal-secondary">
                           {product.name}
                         </p>
-                        <p className="text-xs text-unal-secondary-light">
-                          {formatCOP(product.current_price)} / {product.unit}
-                        </p>
+                        {Array.isArray(product.variants) && product.variants.length > 0 ? (
+                          <p className="text-xs text-unal-secondary-light">
+                            {product.variants
+                              .map((variant) => `${variant.name} ${formatCOP(variant.price)}`)
+                              .join(" · ")}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-unal-secondary-light">
+                            {formatCOP(product.current_price)} / {product.unit}
+                          </p>
+                        )}
                       </div>
                       <span className="badge badge-success whitespace-nowrap">
-                        {product.current_stock} disp.
+                        {product.current_stock} {product.unit} disp.
                       </span>
                     </li>
                   ))}

@@ -67,7 +67,8 @@ async function demoReceiptPdf(url, organizationId) {
     },
     items: items.map((item) => ({
       ...item,
-      description: item.product_name || item.description || "Producto",
+      description:
+        item.description || item.product_name || "Producto",
     })),
     organizationName: sale.organization_name,
   });

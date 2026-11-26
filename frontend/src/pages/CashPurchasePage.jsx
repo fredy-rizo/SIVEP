@@ -122,6 +122,7 @@ export function CashPurchasePage() {
   });
   const [declaredTouched, setDeclaredTouched] = useState(false);
   const [quantities, setQuantities] = useState({});
+  const [selectedVariants, setSelectedVariants] = useState({});
   const [receiptFile, setReceiptFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -133,21 +134,59 @@ export function CashPurchasePage() {
   const [lookupError, setLookupError] = useState('');
   const [lookupResult, setLookupResult] = useState(null);
 
+  const productVariants = (product) =>
+    Array.isArray(product.variants) && product.variants.length > 0
+      ? product.variants
+      : [
+          {
+            id: null,
+            name: product.unit,
+            unit_label: product.unit,
+            price: product.current_price,
+            stock_factor: 1,
+          },
+        ];
+
+  const variantKey = (product, variant, index) =>
+    variant.id != null ? `v${variant.id}` : `p${product.id}-${index}`;
+
+  const selectedVariantIndex = (product) => {
+    const variants = productVariants(product);
+    const current = selectedVariants[product.id];
+    const index = variants.findIndex(
+      (variant, i) => variantKey(product, variant, i) === current,
+    );
+    return index >= 0 ? index : 0;
+  };
+
   const selectedItems = useMemo(
     () =>
-      products
-        .map((product) => ({
-          ...product,
-          quantity: Number(quantities[product.id]) || 0,
-        }))
-        .filter((product) => product.quantity > 0),
-    [products, quantities],
+      products.flatMap((product) => {
+        const variants = productVariants(product);
+        const index = selectedVariantIndex(product);
+        const variant = variants[index];
+        const key = variantKey(product, variant, index);
+        const quantity = Number(quantities[key]) || 0;
+        if (quantity <= 0) return [];
+        const factor = Number(variant.stock_factor) || 1;
+        return [
+          {
+            ...product,
+            variant,
+            variantKey: key,
+            quantity,
+            unit_price: Number(variant.price),
+            stock_available: Number(product.current_stock) / factor,
+          },
+        ];
+      }),
+    [products, quantities, selectedVariants],
   );
 
   const computedTotal = useMemo(
     () =>
       selectedItems.reduce(
-        (sum, item) => sum + Number(item.current_price) * item.quantity,
+        (sum, item) => sum + Number(item.unit_price) * item.quantity,
         0,
       ),
     [selectedItems],
@@ -172,10 +211,24 @@ export function CashPurchasePage() {
     setErrors((prev) => ({ ...prev, [field]: '', general: '' }));
   };
 
-  const setQuantity = (productId, rawValue, max) => {
+  const setQuantity = (key, rawValue, max) => {
     const value = rawValue === '' ? '' : Math.max(0, Math.min(Number(rawValue), max));
-    setQuantities((prev) => ({ ...prev, [productId]: value }));
+    setQuantities((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => ({ ...prev, items: '', general: '' }));
+  };
+
+  const handleVariantChange = (product, rawValue) => {
+    const variants = productVariants(product);
+    const currentIndex = selectedVariantIndex(product);
+    const previousKey = variantKey(product, variants[currentIndex], currentIndex);
+    setQuantities((prev) => ({ ...prev, [previousKey]: '' }));
+    setSelectedVariants((prev) => ({ ...prev, [product.id]: rawValue }));
+    setErrors((prev) => ({ ...prev, items: '', general: '' }));
+  };
+
+  const variantStep = (variant) => {
+    const label = String(variant.unit_label || '').toLowerCase();
+    return label.includes('kg') || label.includes('kilo') ? '0.1' : '1';
   };
 
   const handleReceiptChange = (event) => {
@@ -226,8 +279,8 @@ export function CashPurchasePage() {
     }
 
     for (const item of selectedItems) {
-      if (item.quantity > Number(item.current_stock)) {
-        newErrors.items = `La cantidad de ${item.name} supera el stock disponible (${item.current_stock}).`;
+      if (item.quantity > item.stock_available + 1e-9) {
+        newErrors.items = `La cantidad de ${item.name} (${item.variant.name}) supera el stock disponible (${item.stock_available.toFixed(3)} ${item.variant.unit_label || item.unit}).`;
         break;
       }
     }
@@ -266,6 +319,7 @@ export function CashPurchasePage() {
         JSON.stringify(
           selectedItems.map((item) => ({
             product_id: item.id,
+            variant_id: item.variant.id ?? null,
             quantity: item.quantity,
           })),
         ),
@@ -786,7 +840,19 @@ export function CashPurchasePage() {
                   ) : (
                     <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
                       {products.map((product) => {
-                        const quantity = Number(quantities[product.id]) || 0;
+                        const variants = productVariants(product);
+                        const index = selectedVariantIndex(product);
+                        const variant = variants[index];
+                        const key = variantKey(product, variant, index);
+                        const quantity = Number(quantities[key]) || 0;
+                        const factor = Number(variant.stock_factor) || 1;
+                        const available =
+                          Math.floor((Number(product.current_stock) / factor) * 1000) /
+                          1000;
+                        const selectedKey =
+                          variant.id != null
+                            ? `v${variant.id}`
+                            : `p${product.id}-${index}`;
                         return (
                           <li
                             key={product.id}
@@ -796,9 +862,36 @@ export function CashPurchasePage() {
                               <p className="truncate font-medium text-unal-secondary">
                                 {product.name}
                               </p>
+                              {variants.length > 1 ? (
+                                <select
+                                  value={selectedKey}
+                                  onChange={(event) =>
+                                    handleVariantChange(product, event.target.value)
+                                  }
+                                  className="input-field mt-1 w-full max-w-xs text-sm"
+                                  aria-label={`Presentación de ${product.name}`}
+                                >
+                                  {variants.map((option, optionIndex) => {
+                                    const optionKey =
+                                      option.id != null
+                                        ? `v${option.id}`
+                                        : `p${product.id}-${optionIndex}`;
+                                    return (
+                                      <option key={optionKey} value={optionKey}>
+                                        {option.name} — {formatCurrency(option.price)}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              ) : (
+                                <p className="text-xs text-unal-secondary-light">
+                                  {variant.name}
+                                </p>
+                              )}
                               <p className="text-xs text-unal-secondary-light">
-                                {formatCurrency(product.current_price)} /{' '}
-                                {product.unit} · Stock {product.current_stock}
+                                {formatCurrency(variant.price)} /{' '}
+                                {variant.unit_label || product.unit} · Stock{' '}
+                                {available}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -812,21 +905,17 @@ export function CashPurchasePage() {
                                 id={`quantity-${product.id}`}
                                 type="number"
                                 min="0"
-                                max={product.current_stock}
-                                step="1"
-                                value={quantities[product.id] ?? ''}
+                                max={available}
+                                step={variantStep(variant)}
+                                value={quantities[key] ?? ''}
                                 onChange={(event) =>
-                                  setQuantity(
-                                    product.id,
-                                    event.target.value,
-                                    Number(product.current_stock),
-                                  )
+                                  setQuantity(key, event.target.value, available)
                                 }
                                 className="input-field w-24 text-center"
                               />
                               <span className="min-w-[5.5rem] text-right text-sm font-medium text-unal-secondary">
                                 {formatCurrency(
-                                  Number(product.current_price) * quantity,
+                                  Number(variant.price) * quantity,
                                 )}
                               </span>
                             </div>

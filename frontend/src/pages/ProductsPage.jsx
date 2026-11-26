@@ -49,6 +49,7 @@ export function ProductsPage() {
     description: "",
     image_url: "",
     is_active: true,
+    variants: [],
   });
   const [errors, setErrors] = useState({});
 
@@ -85,12 +86,27 @@ export function ProductsPage() {
     if (!formData.unit.trim()) newErrors.unit = "La unidad es obligatoria";
     if (!formData.current_price || parseFloat(formData.current_price) < 0)
       newErrors.current_price = "Precio inválido";
-    if (formData.current_stock === "" || parseInt(formData.current_stock) < 0)
+    if (formData.current_stock === "" || parseFloat(formData.current_stock) < 0)
       newErrors.current_stock = "Stock inválido";
-    if (formData.min_stock === "" || parseInt(formData.min_stock) < 0)
+    if (formData.min_stock === "" || parseFloat(formData.min_stock) < 0)
       newErrors.min_stock = "Stock mínimo inválido";
     if (!formData.category.trim())
       newErrors.category = "La categoría es obligatoria";
+    for (const variant of formData.variants) {
+      if (!variant.name.trim() || !variant.unit_label.trim()) {
+        newErrors.variants = "Cada presentación debe tener nombre y unidad";
+        break;
+      }
+      if (!variant.price || parseFloat(variant.price) < 0) {
+        newErrors.variants = "Cada presentación debe tener un precio válido";
+        break;
+      }
+      if (!variant.stock_factor || parseFloat(variant.stock_factor) <= 0) {
+        newErrors.variants =
+          "El factor de stock debe ser mayor a cero (ej: 0,5 media cubeta)";
+        break;
+      }
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -106,6 +122,7 @@ export function ProductsPage() {
       description: "",
       image_url: "",
       is_active: true,
+      variants: [],
     });
     setErrors({});
     setEditingProduct(null);
@@ -116,6 +133,24 @@ export function ProductsPage() {
     resetForm();
     if (product) {
       setEditingProduct(product);
+      const variants =
+        Array.isArray(product.variants) && product.variants.length > 0
+          ? product.variants.map((variant) => ({
+              id: variant.id,
+              name: variant.name,
+              unit_label: variant.unit_label || product.unit,
+              price: variant.price,
+              stock_factor: variant.stock_factor,
+            }))
+          : [
+              {
+                id: null,
+                name: product.unit,
+                unit_label: product.unit,
+                price: product.current_price,
+                stock_factor: 1,
+              },
+            ];
       setFormData({
         name: product.name,
         unit: product.unit,
@@ -128,9 +163,42 @@ export function ProductsPage() {
         // MySQL devuelve 1/0 y Joi solo acepta booleanos: se normaliza aquí
         // para que guardar sin tocar la casilla no falle la validación.
         is_active: !!product.is_active,
+        variants,
       });
     }
     setModalOpen(true);
+  };
+
+  const updateVariant = (index, field, value) => {
+    setFormData((prev) => {
+      const variants = prev.variants.map((variant, i) =>
+        i === index ? { ...variant, [field]: value } : variant,
+      );
+      return { ...prev, variants };
+    });
+  };
+
+  const addVariantRow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: [
+        ...prev.variants,
+        {
+          id: null,
+          name: "",
+          unit_label: prev.unit || "",
+          price: "",
+          stock_factor: 1,
+        },
+      ],
+    }));
+  };
+
+  const removeVariantRow = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, i) => i !== index),
+    }));
   };
 
   const handleImageFileChange = async (e) => {
@@ -176,13 +244,27 @@ export function ProductsPage() {
       const data = {
         name: formData.name,
         unit: formData.unit,
-        current_price: parseFloat(formData.current_price),
-        current_stock: parseInt(formData.current_stock),
-        min_stock: parseInt(formData.min_stock),
+        current_price:
+          formData.variants.length > 0
+            ? parseFloat(formData.variants[0].price)
+            : parseFloat(formData.current_price),
+        current_stock: parseFloat(formData.current_stock),
+        min_stock: parseFloat(formData.min_stock),
         category: formData.category,
         description: formData.description || null,
         image_url: formData.image_url || null,
         is_active: formData.is_active,
+        variants:
+          formData.variants.length > 0
+            ? formData.variants.map((variant, index) => ({
+                id: variant.id || undefined,
+                name: variant.name,
+                unit_label: variant.unit_label,
+                price: parseFloat(variant.price),
+                stock_factor: parseFloat(variant.stock_factor),
+                sort_order: index,
+              }))
+            : undefined,
       };
 
       if (editingProduct) {
@@ -222,9 +304,23 @@ export function ProductsPage() {
     },
     {
       key: "current_price",
-      label: "Precio",
-      render: (v) => formatCOP(v),
-      sortable: true,
+      label: "Precios",
+      render: (v, row) => {
+        const variants =
+          Array.isArray(row.variants) && row.variants.length > 0
+            ? row.variants
+            : [{ name: row.unit, price: v }];
+        return (
+          <div className="space-y-0.5 text-xs">
+            {variants.map((variant) => (
+              <div key={variant.id ?? variant.name}>
+                <span className="text-unal-secondary-light">{variant.name}: </span>
+                <span className="font-medium">{formatCOP(variant.price)}</span>
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
     {
       key: "current_stock",
@@ -434,6 +530,7 @@ export function ProductsPage() {
               id="current_stock"
               type="number"
               min="0"
+              step="0.001"
               value={formData.current_stock}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -456,6 +553,105 @@ export function ProductsPage() {
               error={errors.min_stock}
               required
             />
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <label className="label-field mb-0">Presentaciones</label>
+                  <p className="text-xs text-unal-secondary-light">
+                    Precio de venta y unidades de stock que descuenta cada una.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addVariantRow}
+                  className="btn-secondary text-sm py-1 px-3"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Añadir
+                </button>
+              </div>
+              {errors.variants && <FormError message={errors.variants} />}
+              <div className="space-y-2">
+                {formData.variants.length === 0 && (
+                  <p className="text-sm text-unal-secondary-light border border-dashed rounded-lg p-3">
+                    Sin presentaciones: al guardar se creará una con la unidad y
+                    el precio actuales.
+                  </p>
+                )}
+                {formData.variants.map((variant, index) => (
+                  <div
+                    key={variant.id ?? `new-${index}`}
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-lg border border-gray-200 p-2"
+                  >
+                    <div className="sm:col-span-4">
+                      <label className="text-xs text-unal-secondary-light">
+                        Presentación
+                      </label>
+                      <input
+                        className="input-field"
+                        value={variant.name}
+                        placeholder="Cubeta, media cubeta, tarro 465 g..."
+                        onChange={(e) =>
+                          updateVariant(index, "name", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-unal-secondary-light">
+                        Unidad
+                      </label>
+                      <input
+                        className="input-field"
+                        value={variant.unit_label}
+                        placeholder="cubeta"
+                        onChange={(e) =>
+                          updateVariant(index, "unit_label", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-unal-secondary-light">
+                        Precio
+                      </label>
+                      <input
+                        className="input-field"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={variant.price}
+                        onChange={(e) =>
+                          updateVariant(index, "price", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-unal-secondary-light">
+                        Factor stock
+                      </label>
+                      <input
+                        className="input-field"
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={variant.stock_factor}
+                        onChange={(e) =>
+                          updateVariant(index, "stock_factor", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => removeVariantRow(index)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Quitar presentación"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="md:col-span-2">
               <label className="label-field">Descripción</label>
               <textarea

@@ -44,13 +44,22 @@ async function runSeed() {
     const products = [
       {
         name: "Huevos",
-        unit: "docena",
+        unit: "cubeta",
         current_price: 12000.0,
         current_stock: 100,
         min_stock: 20,
         category: "Avícola",
         description: "Huevos frescos de gallinas ponedoras",
         is_active: true,
+        variants: [
+          { name: "Cubeta", unit_label: "cubeta", price: 12000, stock_factor: 1 },
+          {
+            name: "Media cubeta",
+            unit_label: "media cubeta",
+            price: 6000,
+            stock_factor: 0.5,
+          },
+        ],
       },
       {
         name: "Gallinas Ponedoras",
@@ -61,36 +70,76 @@ async function runSeed() {
         category: "Avícola",
         description: "Gallinas ponedoras en producción",
         is_active: true,
+        variants: [
+          { name: "Unidad", unit_label: "unidad", price: 85000, stock_factor: 1 },
+        ],
       },
       {
         name: "Peces",
-        unit: "kilogramo",
-        current_price: 25000.0,
+        unit: "kg",
+        current_price: 12000.0,
         current_stock: 200,
         min_stock: 50,
         category: "Piscícola",
-        description: "Peces frescos de cultivo",
+        description: "Cachama fresca de cultivo",
         is_active: true,
+        variants: [
+          {
+            name: "Con escamas",
+            unit_label: "kg",
+            price: 12000,
+            stock_factor: 1,
+          },
+          {
+            name: "Sin escamas",
+            unit_label: "kg",
+            price: 14000,
+            stock_factor: 1,
+          },
+        ],
       },
       {
         name: "Miel",
-        unit: "litro",
+        unit: "kg",
         current_price: 45000.0,
         current_stock: 30,
         min_stock: 10,
         category: "Apícola",
         description: "Miel natural de abejas",
         is_active: true,
+        variants: [
+          {
+            name: "Tarro 465 g",
+            unit_label: "tarro 465 g",
+            price: 22000,
+            stock_factor: 0.465,
+          },
+          {
+            name: "Tarro 650 g",
+            unit_label: "tarro 650 g",
+            price: 30000,
+            stock_factor: 0.65,
+          },
+          { name: "Kilo", unit_label: "kg", price: 45000, stock_factor: 1 },
+        ],
       },
       {
         name: "Porcino",
-        unit: "unidad",
-        current_price: 350000.0,
-        current_stock: 15,
-        min_stock: 5,
+        unit: "kg",
+        current_price: 5000.0,
+        current_stock: 150,
+        min_stock: 20,
         category: "Porcino",
-        description: "Marranos para levante y venta",
+        description: "Porcino vendido por kilo vivo",
         is_active: true,
+        variants: [
+          {
+            name: "Kilo vivo",
+            unit_label: "kg vivo",
+            price: 5000,
+            stock_factor: 1,
+          },
+        ],
       },
     ];
 
@@ -112,6 +161,35 @@ async function runSeed() {
           product.is_active,
         ],
       );
+
+      const [rows] = await connection.query(
+        "SELECT id FROM products WHERE organization_id = ? AND name = ? LIMIT 1",
+        [organizationId, product.name],
+      );
+      if (rows.length === 0) continue;
+
+      const [existingVariants] = await connection.query(
+        "SELECT id FROM product_variants WHERE product_id = ? LIMIT 1",
+        [rows[0].id],
+      );
+      if (existingVariants.length > 0) continue;
+
+      for (const [index, variant] of product.variants.entries()) {
+        await connection.query(
+          `INSERT INTO product_variants
+             (organization_id, product_id, name, unit_label, price, stock_factor, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            organizationId,
+            rows[0].id,
+            variant.name,
+            variant.unit_label,
+            variant.price,
+            variant.stock_factor,
+            index,
+          ],
+        );
+      }
     }
 
     console.log("Productos base creados/verificados");

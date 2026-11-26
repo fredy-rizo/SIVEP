@@ -11,6 +11,8 @@ import {
 } from "./billingSchema.js";
 // Aislamiento multi-tenant de las tablas de negocio.
 import { ensureOrganizationColumns } from "./multitenantSchema.js";
+// Presentaciones (cubeta, tarro, kilo...) y stock decimal.
+import { ensureProductVariants } from "./productVariantsSchema.js";
 
 dotenv.config();
 
@@ -36,8 +38,8 @@ const migrations = [
     name VARCHAR(255) NOT NULL,
     unit VARCHAR(50) NOT NULL,
     current_price DECIMAL(15,2) NOT NULL DEFAULT 0.00,
-    current_stock INT NOT NULL DEFAULT 0,
-    min_stock INT NOT NULL DEFAULT 0,
+    current_stock DECIMAL(12,3) NOT NULL DEFAULT 0.000,
+    min_stock DECIMAL(12,3) NOT NULL DEFAULT 0.000,
     category VARCHAR(100) NOT NULL,
     description TEXT NULL,
     image_url VARCHAR(500) NULL,
@@ -101,9 +103,12 @@ const migrations = [
     product_id INT NULL,
     description VARCHAR(255) NULL,
     source ENUM('inventario', 'externo') NOT NULL DEFAULT 'inventario',
-    quantity INT NOT NULL,
+    quantity DECIMAL(12,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
     total DECIMAL(15,2) NOT NULL,
+    variant_id INT NULL,
+    variant_name VARCHAR(120) NULL,
+    unit_label VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
@@ -117,9 +122,9 @@ const migrations = [
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     movement_type ENUM('entrada', 'salida', 'ajuste') NOT NULL,
-    quantity INT NOT NULL,
-    previous_stock INT NOT NULL,
-    new_stock INT NOT NULL,
+    quantity DECIMAL(12,3) NOT NULL,
+    previous_stock DECIMAL(12,3) NOT NULL,
+    new_stock DECIMAL(12,3) NOT NULL,
     reason VARCHAR(255) NOT NULL,
     reference_type ENUM('venta', 'compra', 'ajuste_manual', 'devolucion', 'otro') NOT NULL DEFAULT 'otro',
     reference_id INT NULL,
@@ -153,6 +158,7 @@ async function runMigrations() {
     await ensureLifecycleColumns(connection);
     await seedBillingCatalog(connection);
     await ensureOrganizationColumns(connection);
+    await ensureProductVariants(connection);
 
     console.log("Migraciones completadas exitosamente");
   } catch (error) {

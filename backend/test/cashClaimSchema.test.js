@@ -41,8 +41,16 @@ test("cashClaimSchema exige al menos un producto", async () => {
   assert.ok(error);
 });
 
+test("cashClaimSchema acepta cantidades decimales (peso en kg)", async () => {
+  const { error } = await cashClaimSchema.validate({
+    ...validClaim,
+    items: [{ product_id: 1, variant_id: 3, quantity: 1.5 }],
+  });
+  assert.ok(!error);
+});
+
 test("cashClaimSchema rechaza cantidades no positivas", async () => {
-  for (const quantity of [0, -1, 1.5]) {
+  for (const quantity of [0, -1]) {
     const { error } = await cashClaimSchema.validate({
       ...validClaim,
       items: [{ product_id: 1, quantity }],

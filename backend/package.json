@@ -21,6 +21,7 @@
     "db:add-payments": "node src/database/add-payment-columns.js",
     "db:add-external-sales": "node src/database/add-external-sales.js",
     "db:add-cash-claims": "node src/database/add-cash-claims.js",
+    "db:add-product-variants": "node src/database/add-product-variants.js",
     "db:run-pending-orders": "node src/database/run-pending-orders.js"
   },
   "dependencies": {

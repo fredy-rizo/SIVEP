@@ -28,6 +28,27 @@ export function NewSalePage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [variantSelections, setVariantSelections] = useState({});
+
+  const productVariants = (product) =>
+    Array.isArray(product.variants) && product.variants.length > 0
+      ? product.variants
+      : [
+          {
+            id: null,
+            name: product.unit,
+            unit_label: product.unit,
+            price: product.current_price,
+            stock_factor: 1,
+          },
+        ];
+
+  const selectedVariantFor = (product) => {
+    const variants = productVariants(product);
+    if (variants.length === 1) return variants[0];
+    const chosen = variantSelections[product.id];
+    return variants.find((variant) => String(variant.id) === String(chosen)) || variants[0];
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,27 +83,37 @@ export function NewSalePage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const addItem = (product) => {
-    const existingIndex = items.findIndex(i => i.product_id === product.id);
+  const addItem = (product, variant) => {
+    const factor = Number(variant?.stock_factor) || 1;
+    const maxStock = Number(product.current_stock) / factor;
+    const itemKey = variant?.id != null ? `v${variant.id}` : `p${product.id}`;
+    const existingIndex = items.findIndex((item) => item.item_key === itemKey);
     if (existingIndex >= 0) {
       const newItems = [...items];
-      if (newItems[existingIndex].quantity < product.current_stock) {
+      if (newItems[existingIndex].quantity + 1 <= maxStock + 1e-9) {
         newItems[existingIndex].quantity += 1;
-        newItems[existingIndex].total = newItems[existingIndex].quantity * newItems[existingIndex].unit_price;
+        newItems[existingIndex].total =
+          newItems[existingIndex].quantity * newItems[existingIndex].unit_price;
         setItems(newItems);
       } else {
-        toast.warning('Stock insuficiente', `Solo hay ${product.current_stock} unidades disponibles`);
+        toast.warning('Stock insuficiente', `Solo hay ${maxStock} disponibles`);
       }
     } else {
-      setItems([...items, {
-        product_id: product.id,
-        product_name: product.name,
-        product_unit: product.unit,
-        quantity: 1,
-        unit_price: product.current_price,
-        total: product.current_price,
-        max_stock: product.current_stock
-      }]);
+      setItems([
+        ...items,
+        {
+          item_key: itemKey,
+          product_id: product.id,
+          variant_id: variant?.id ?? null,
+          product_name: variant?.name ? `${product.name} - ${variant.name}` : product.name,
+          product_unit: variant?.unit_label || product.unit,
+          quantity: 1,
+          unit_price: Number(variant?.price ?? product.current_price),
+          total: Number(variant?.price ?? product.current_price),
+          max_stock: maxStock,
+          stock_factor: factor,
+        },
+      ]);
     }
     setShowProductModal(false);
     setProductSearch('');
@@ -90,13 +121,13 @@ export function NewSalePage() {
 
   const updateQuantity = (index, change) => {
     const newItems = [...items];
-    const newQty = newItems[index].quantity + change;
-    if (newQty > 0 && newQty <= newItems[index].max_stock) {
+    const newQty = Math.round((newItems[index].quantity + change) * 1000) / 1000;
+    if (newQty > 0 && newQty <= newItems[index].max_stock + 1e-9) {
       newItems[index].quantity = newQty;
       newItems[index].total = newQty * newItems[index].unit_price;
       setItems(newItems);
     } else if (newQty > newItems[index].max_stock) {
-      toast.warning('Stock insuficiente', `Máximo ${newItems[index].max_stock} unidades`);
+      toast.warning('Stock insuficiente', `Máximo ${newItems[index].max_stock}`);
     }
   };
 
@@ -122,8 +153,8 @@ export function NewSalePage() {
         notes: formData.notes || null,
         items: items.map(item => ({
           product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price
+          variant_id: item.variant_id,
+          quantity: item.quantity
         }))
       };
 
@@ -140,19 +171,66 @@ export function NewSalePage() {
 
   const productColumns = [
     { key: 'name', label: 'Producto' },
-    { key: 'unit', label: 'Unidad' },
-    { key: 'current_price', label: 'Precio', render: (v) => formatCOP(v) },
-    { key: 'current_stock', label: 'Stock' }
+    { key: 'unit', label: 'Unidad base' },
+    {
+      key: 'variants',
+      label: 'Presentación',
+      render: (v, row) => {
+        const variants = productVariants(row);
+        if (variants.length <= 1) {
+          return <span className="text-sm">{variants[0]?.name}</span>;
+        }
+        return (
+          <select
+            value={selectedVariantFor(row).id ?? ''}
+            onChange={(e) =>
+              setVariantSelections((prev) => ({ ...prev, [row.id]: e.target.value }))
+            }
+            className="input-field py-1 text-sm"
+          >
+            {variants.map((variant) => (
+              <option key={variant.id} value={variant.id ?? ''}>
+                {variant.name} — {formatCOP(variant.price)}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
+    {
+      key: 'stock',
+      label: 'Disponible',
+      render: (v, row) => {
+        const variant = selectedVariantFor(row);
+        const factor = Number(variant.stock_factor) || 1;
+        return `${Math.floor((Number(row.current_stock) / factor) * 1000) / 1000} ${variant.unit_label || row.unit}`;
+      },
+    },
   ];
 
   const itemColumns = [
     { key: 'product_name', label: 'Producto' },
-    { key: 'product_unit', label: 'Unidad' },
+    { key: 'product_unit', label: 'Presentación' },
     { key: 'quantity', label: 'Cantidad', render: (v, row) => (
       <div className="flex items-center justify-center gap-2">
-        <button onClick={() => updateQuantity(items.indexOf(row), -1)} className="p-1 text-unal-primary hover:bg-unal-primary/10 rounded" disabled={v <= 1}><Minus className="w-4 h-4" /></button>
-        <span className="font-medium w-12 text-center">{v}</span>
-        <button onClick={() => updateQuantity(items.indexOf(row), 1)} className="p-1 text-unal-primary hover:bg-unal-primary/10 rounded" disabled={v >= row.max_stock}><Plus className="w-4 h-4" /></button>
+        <button type="button" onClick={() => updateQuantity(items.indexOf(row), -1)} className="p-1 text-unal-primary hover:bg-unal-primary/10 rounded"><Minus className="w-4 h-4" /></button>
+        <input
+          type="number"
+          min={0.001}
+          max={row.max_stock}
+          step={Number(row.stock_factor) < 1 ? '0.1' : '1'}
+          value={v}
+          onChange={(e) => {
+            const newItems = [...items];
+            const index = items.indexOf(row);
+            const next = Math.max(0, Math.min(Number(e.target.value), row.max_stock));
+            newItems[index].quantity = next;
+            newItems[index].total = next * newItems[index].unit_price;
+            setItems(newItems);
+          }}
+          className="input-field w-24 text-center py-1"
+        />
+        <button type="button" onClick={() => updateQuantity(items.indexOf(row), 1)} className="p-1 text-unal-primary hover:bg-unal-primary/10 rounded"><Plus className="w-4 h-4" /></button>
       </div>
     )},
     { key: 'unit_price', label: 'Precio unit.', render: (v) => formatCOP(v) },
@@ -243,7 +321,7 @@ export function NewSalePage() {
             <DataTable
               columns={itemColumns}
               data={items}
-              keyField="product_id"
+              keyField="item_key"
               pagination={false}
               emptyMessage="No hay productos"
               renderActions={(row) => (
@@ -308,7 +386,7 @@ export function NewSalePage() {
             emptyMessage="No se encontraron productos"
             renderActions={(row) => (
               <button
-                onClick={() => addItem(row)}
+                onClick={() => addItem(row, selectedVariantFor(row))}
                 className="btn-primary text-sm py-1 px-3"
                 disabled={row.current_stock === 0}
               >

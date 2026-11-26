@@ -10,6 +10,7 @@ import {
   normalizePickupCode,
 } from "../utils/pickup.js";
 import { applyStockMovement, InventoryError } from "../services/inventoryService.js";
+import { resolveSaleItem } from "../services/productVariants.js";
 import { publishCatalogUpdate } from "../services/catalogEvents.js";
 
 // ============================================================================
@@ -98,8 +99,8 @@ export async function getSaleById(request, reply) {
   }
 
   const [items] = await pool.query(
-    `SELECT si.*, COALESCE(p.name, si.description, 'Venta externa') as product_name,
-            COALESCE(p.unit, '') as product_unit
+    `SELECT si.*, COALESCE(si.description, p.name, 'Venta externa') as product_name,
+            COALESCE(si.unit_label, p.unit, '') as product_unit
      FROM sale_items si
      LEFT JOIN products p ON si.product_id = p.id
      WHERE si.sale_id = ?`,
@@ -142,33 +143,23 @@ export async function createSale(request, reply) {
     let subtotal = 0;
     const saleItems = [];
 
-    // Se leen precios y nombres, pero NO se decide aquí si hay stock: esa
-    // validación la hace `applyStockMovement` con la fila bloqueada, que es la
-    // única lectura confiable cuando hay compras concurrentes.
+    // Se leen precios y nombres desde la presentación, pero NO se decide aquí
+    // si hay stock: esa validación la hace `applyStockMovement` con la fila
+    // bloqueada, que es la única lectura confiable cuando hay ventas
+    // concurrentes. `stock_quantity` aplica el factor de la presentación
+    // (media cubeta = 0,5; tarro de 465 g = 0,465).
     for (const item of items) {
-      const [products] = await connection.query(
-        "SELECT id, name, current_price FROM products WHERE id = ? AND is_active = TRUE AND organization_id = ?",
-        [item.product_id, organizationId],
-      );
+      const line = await resolveSaleItem(connection, organizationId, item);
 
-      if (products.length === 0) {
+      if (!line) {
         throw new InventoryError(
-          `Producto con ID ${item.product_id} no encontrado o inactivo`,
+          `Producto o presentación no encontrado (ID ${item.variant_id || item.product_id})`,
           { statusCode: 404, code: "PRODUCT_NOT_FOUND" },
         );
       }
 
-      const product = products[0];
-      const unitPrice = item.unit_price ?? product.current_price;
-      const total = unitPrice * item.quantity;
-      subtotal += total;
-
-      saleItems.push({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: unitPrice,
-        total,
-      });
+      subtotal += line.total;
+      saleItems.push(line);
     }
 
     const tax = 0;
@@ -177,7 +168,11 @@ export async function createSale(request, reply) {
 
     // Ordenar por producto reduce el riesgo de interbloqueo (deadlock) cuando
     // dos ventas tocan los mismos productos en distinto orden.
-    saleItems.sort((a, b) => a.product_id - b.product_id);
+    saleItems.sort(
+      (a, b) =>
+        a.product_id - b.product_id ||
+        Number(a.variant_id || 0) - Number(b.variant_id || 0),
+    );
 
     const [saleResult] = await connection.query(
       `INSERT INTO sales (organization_id, invoice_number, customer_id, sale_date, subtotal, tax, total, payment_type, payment_status, pickup_code, pickup_status, created_by, notes)
@@ -211,9 +206,21 @@ export async function createSale(request, reply) {
 
     for (const item of saleItems) {
       await connection.query(
-        `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total)
-         VALUES (?, ?, ?, ?, ?)`,
-        [saleId, item.product_id, item.quantity, item.unit_price, item.total],
+        `INSERT INTO sale_items
+           (sale_id, product_id, description, quantity, unit_price, total,
+            variant_id, variant_name, unit_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          saleId,
+          item.product_id,
+          item.description,
+          item.quantity,
+          item.unit_price,
+          item.total,
+          item.variant_id,
+          item.variant_name,
+          item.unit_label,
+        ],
       );
 
       // Descuento atómico. Si no alcanza, lanza InventoryError y toda la venta
@@ -222,7 +229,7 @@ export async function createSale(request, reply) {
         organizationId,
         productId: item.product_id,
         movementType: "salida",
-        quantity: item.quantity,
+        quantity: item.stock_quantity,
         reason: `Venta ${invoice_number}`,
         referenceType: "venta",
         referenceId: saleId,
@@ -325,8 +332,8 @@ export async function validatePickupCode(request, reply) {
   }
 
   const [items] = await pool.query(
-    `SELECT si.*, COALESCE(p.name, si.description, 'Venta externa') as product_name,
-            COALESCE(p.unit, '') as product_unit
+    `SELECT si.*, COALESCE(si.description, p.name, 'Venta externa') as product_name,
+            COALESCE(si.unit_label, p.unit, '') as product_unit
      FROM sale_items si
      LEFT JOIN products p ON si.product_id = p.id
      WHERE si.sale_id = ?`,

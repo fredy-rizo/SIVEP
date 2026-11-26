@@ -268,7 +268,9 @@ export function CashClaimsPage() {
 
   const hasStockWarning =
     detail?.items?.some(
-      (item) => Number(item.quantity) > Number(item.current_stock ?? 0),
+      (item) =>
+        Number(item.quantity) * (Number(item.stock_factor) || 1) >
+        Number(item.current_stock ?? 0),
     ) || false;
 
   return (
@@ -585,8 +587,10 @@ export function CashClaimsPage() {
                   </thead>
                   <tbody>
                     {detail.items.map((item) => {
+                      const requiredStock =
+                        Number(item.quantity) * (Number(item.stock_factor) || 1);
                       const insufficient =
-                        Number(item.quantity) > Number(item.current_stock ?? 0);
+                        requiredStock > Number(item.current_stock ?? 0);
                       return (
                         <tr key={item.id}>
                           <td>

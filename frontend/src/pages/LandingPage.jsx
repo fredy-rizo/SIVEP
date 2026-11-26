@@ -6,8 +6,11 @@ import { BuyOnUnalButton } from "../components/BuyOnUnalButton";
 const products = [
   {
     name: "Huevos",
-    unit: "Cubeta",
-    price: 12000,
+    unit: "cubeta",
+    presentations: [
+      { label: "Cubeta", price: 12000 },
+      { label: "Media cubeta", price: 6000 },
+    ],
     image:
       "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400&h=300&fit=crop",
     category: "Avícola",
@@ -15,30 +18,37 @@ const products = [
   {
     name: "Gallinas Ponedoras",
     unit: "unidad",
-    price: 85000,
+    presentations: [{ label: "Unidad", price: 85000 }],
     image:
       "https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=400&h=300&fit=crop",
     category: "Avícola",
   },
   {
     name: "Peces",
-    unit: "kilogramo",
-    price: 25000,
+    unit: "kg",
+    presentations: [
+      { label: "Con escamas", price: 12000 },
+      { label: "Sin escamas", price: 14000 },
+    ],
     image: "/peces-cachama.jpg",
     category: "Piscícola",
   },
   {
     name: "Miel",
-    unit: "litro",
-    price: 45000,
+    unit: "tarro / kg",
+    presentations: [
+      { label: "Tarro 465 g", price: 22000 },
+      { label: "Tarro 650 g", price: 30000 },
+      { label: "Kilo gramo", price: 45000 },
+    ],
     image:
       "https://images.unsplash.com/photo-1587049352851-8d4e89133924?w=400&h=300&fit=crop",
     category: "Apícola",
   },
   {
     name: "Porcinos",
-    unit: "unidad",
-    price: 350000,
+    unit: "kg vivo",
+    presentations: [{ label: "Kilo vivo", price: 5000 }],
     image: "https://upload.wikimedia.org/wikipedia/commons/1/1e/JEFO-Pigs.jpg",
     category: "Porcinocultura",
   },
@@ -233,11 +243,21 @@ export function LandingPage() {
                     <p className="text-sm text-unal-secondary-light mb-3">
                       Precio por {product.unit}
                     </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xl font-bold text-unal-primary">
-                        ${product.price.toLocaleString("es-CO")}
-                      </span>
-                    </div>
+                    <ul className="space-y-1">
+                      {product.presentations.map((presentation) => (
+                        <li
+                          key={presentation.label}
+                          className="flex items-center justify-between gap-2 text-sm"
+                        >
+                          <span className="text-unal-secondary-light">
+                            {presentation.label}
+                          </span>
+                          <span className="font-bold text-unal-primary">
+                            ${presentation.price.toLocaleString("es-CO")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </article>
               ))}

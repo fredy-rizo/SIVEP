@@ -92,7 +92,7 @@ export function InventoryPage() {
   const validateMovement = () => {
     const newErrors = {};
     if (!movementForm.product_id) newErrors.product_id = 'Seleccione un producto';
-    if (!movementForm.quantity || parseInt(movementForm.quantity) <= 0) newErrors.quantity = 'Cantidad inválida';
+    if (!movementForm.quantity || parseFloat(movementForm.quantity) <= 0) newErrors.quantity = 'Cantidad inválida';
     if (!movementForm.reason.trim()) newErrors.reason = 'El motivo es obligatorio';
     setMovementErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -121,7 +121,7 @@ export function InventoryPage() {
       await api.post('/inventory/movement', {
         product_id: parseInt(movementForm.product_id),
         movement_type: movementForm.movement_type,
-        quantity: parseInt(movementForm.quantity),
+        quantity: parseFloat(movementForm.quantity),
         reason: movementForm.reason,
         reference_type: movementForm.reference_type,
         reference_id: movementForm.reference_id || null
@@ -348,7 +348,8 @@ export function InventoryPage() {
               label="Cantidad *"
               id="movement_quantity"
               type="number"
-              min="1"
+              min="0.001"
+              step="0.001"
               value={movementForm.quantity}
               onChange={(e) => setMovementForm(prev => ({ ...prev, quantity: e.target.value }))}
               error={movementErrors.quantity}
